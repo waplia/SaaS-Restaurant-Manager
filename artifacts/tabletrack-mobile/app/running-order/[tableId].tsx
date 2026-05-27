@@ -25,10 +25,12 @@ import {
   useCancelOrderItem,
   useSettleRunningOrder,
   useSetItemKitchenStatus,
+  useCreateStaffWaiterRequest,
   useFreeTable,
   type RunningOrderItem,
   type KotBatch,
 } from "@/hooks/useRunningOrder";
+import { usePermission } from "@/hooks/usePermission";
 
 const PAYMENT_METHODS = [
   { key: "cash", label: "Cash", icon: "cash-outline" as const },
@@ -75,6 +77,7 @@ export default function RunningOrderScreen() {
   const cancelItem = useCancelOrderItem();
   const settle = useSettleRunningOrder();
   const setItemStatus = useSetItemKitchenStatus();
+  const createStaffRequest = useCreateStaffWaiterRequest();
   const freeTable = useFreeTable();
 
   const [modifyTarget, setModifyTarget] = useState<RunningOrderItem | null>(null);
@@ -84,8 +87,19 @@ export default function RunningOrderScreen() {
   const [settleMethod, setSettleMethod] = useState("cash");
   const [moreOpen, setMoreOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Task #637 — Customer Note + Call Manager sheets.
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [callMgrOpen, setCallMgrOpen] = useState(false);
+  const [callMgrNote, setCallMgrNote] = useState("");
 
   const isManagerial = !!user && ["owner", "manager", "super_admin"].includes(user.role);
+  // Task #637 — gate the four new waiter actions on usePermission so the
+  // UI only offers them to roles that can execute them.
+  const canVoiceOrder = usePermission("waiter.voice_order");
+  const canAddNote = usePermission("waiter.customer_note");
+  const canMarkServed = usePermission("waiter.mark_served");
+  const canCallManager = usePermission("waiter.call_manager");
 
   const activeItems = useMemo(() => items.filter((i) => i.status !== "cancelled"), [items]);
   const totalItems = useMemo(
@@ -202,19 +216,21 @@ export default function RunningOrderScreen() {
 
   const handleMarkAllServed = async () => {
     if (!order) return;
-    const targets = activeItems.filter((i) => i.status !== "served");
+    // Task #637: waiter/captain may only flip items from ready -> served;
+    // the backend rejects anything else with 409. Filter client-side so
+    // we don't fire pointless requests for pending/preparing items.
+    const targets = activeItems.filter((i) => i.status === "ready");
     if (targets.length === 0) {
-      Alert.alert("All served", "Every active item is already marked served.");
+      Alert.alert("Nothing ready", "There are no ready items waiting to be served.");
       return;
     }
     try {
-      // The kitchen-status endpoint accepts pending/preparing/ready/out_of_stock.
-      // "served" is tracked on the order_item directly via the served bell —
-      // we use "ready" here so it appears as ready at the pass; the bell
-      // flow on KDS marks it served. Best-available action from this screen.
+      // Task #637: kitchen-status PATCH now accepts "served" from the
+      // waiter/captain roles, so "Mark all served" actually flips items
+      // out of the Ready queue.
       await Promise.all(
         targets.map((it) =>
-          setItemStatus.mutateAsync({ orderId: order.id, itemId: it.id, status: "ready" }),
+          setItemStatus.mutateAsync({ orderId: order.id, itemId: it.id, status: "served" }),
         ),
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -222,6 +238,70 @@ export default function RunningOrderScreen() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Could not update items.";
       Alert.alert("Partial update", msg);
+    }
+  };
+
+  // Task #637 — flip a single ready item to served from the floor.
+  const handleMarkItemServed = async (item: RunningOrderItem) => {
+    if (!order) return;
+    try {
+      await setItemStatus.mutateAsync({ orderId: order.id, itemId: item.id, status: "served" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not mark served.";
+      Alert.alert("Failed", msg);
+    }
+  };
+
+  // Task #637 — Customer Note action. Appends the captured note to the
+  // first non-cancelled item that doesn't already have one (or replaces
+  // the existing note on the first item) using the existing modify
+  // endpoint — so the kitchen sees it on the next KOT round.
+  const handleSaveCustomerNote = async () => {
+    if (!order) return;
+    const note = noteText.trim();
+    if (!note) {
+      Alert.alert("Empty note", "Type a note for the kitchen first.");
+      return;
+    }
+    const target = activeItems[0];
+    if (!target) {
+      Alert.alert("No items", "Add at least one item before attaching a customer note.");
+      return;
+    }
+    try {
+      const combined = target.notes ? `${target.notes}\n${note}` : note;
+      await modifyItem.mutateAsync({
+        orderId: order.id,
+        itemId: target.id,
+        notes: combined,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setNoteOpen(false);
+      setNoteText("");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not save the note.";
+      Alert.alert("Failed", msg);
+    }
+  };
+
+  // Task #637 — Call Manager action. Creates a staff-initiated
+  // waiter_request of type "call_manager"; the backend fans out a push
+  // + Service Alert to manager/owner roles.
+  const handleCallManager = async () => {
+    try {
+      await createStaffRequest.mutateAsync({
+        tableId: Number.isFinite(tableId) ? tableId : null,
+        type: "call_manager",
+        note: callMgrNote.trim() || null,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCallMgrOpen(false);
+      setCallMgrNote("");
+      Alert.alert("Manager called", "A manager has been notified and will be with you shortly.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not page the manager.";
+      Alert.alert("Failed", msg);
     }
   };
 
@@ -414,6 +494,19 @@ export default function RunningOrderScreen() {
                       </AppText>
                       {!isPaid && !isCancelled && item.status !== "cancelled" ? (
                         <View style={{ flexDirection: "row", gap: 4 }}>
+                          {/* Task #637 — per-item Mark Served bell shows
+                              up only on items the kitchen has flagged
+                              `ready`, gated by waiter.mark_served. */}
+                          {canMarkServed && item.status === "ready" ? (
+                            <AppButton
+                              label="Served"
+                              variant="primary"
+                              size="sm"
+                              leftIcon="checkmark-circle-outline"
+                              loading={setItemStatus.isPending && setItemStatus.variables?.itemId === item.id}
+                              onPress={() => handleMarkItemServed(item)}
+                            />
+                          ) : null}
                           <AppButton
                             label="Edit"
                             variant="ghost"
@@ -591,6 +684,56 @@ export default function RunningOrderScreen() {
         title="More actions"
         scrollable={false}
       >
+        {/* Task #637 — Voice Order opens the new-order menu pre-attached
+            to this table with the voice-capture modal auto-opened so
+            the waiter can dictate the next round hands-free. */}
+        {canVoiceOrder && !isPaid && !isCancelled ? (
+          <AppButton
+            label="Voice order"
+            variant="outline"
+            fullWidth
+            leftIcon="mic-outline"
+            onPress={() => {
+              setMoreOpen(false);
+              router.push({
+                pathname: "/new-order/menu",
+                params: {
+                  tableId: String(tableId),
+                  tableLabel,
+                  existingOrderId: String(order.id),
+                  runningOrder: "1",
+                  voice: "1",
+                },
+              } as never);
+            }}
+          />
+        ) : null}
+        {canAddNote && !isPaid && !isCancelled ? (
+          <AppButton
+            label="Customer note"
+            variant="outline"
+            fullWidth
+            leftIcon="chatbubble-ellipses-outline"
+            onPress={() => {
+              setMoreOpen(false);
+              setNoteText("");
+              setNoteOpen(true);
+            }}
+          />
+        ) : null}
+        {canCallManager ? (
+          <AppButton
+            label="Call manager"
+            variant="outline"
+            fullWidth
+            leftIcon="alert-circle-outline"
+            onPress={() => {
+              setMoreOpen(false);
+              setCallMgrNote("");
+              setCallMgrOpen(true);
+            }}
+          />
+        ) : null}
         <AppButton
           label="Print KOT"
           variant="outline"
@@ -601,14 +744,16 @@ export default function RunningOrderScreen() {
             Alert.alert("KOT", "Last KOT round has been re-sent to the kitchen printer.");
           }}
         />
-        <AppButton
-          label="Mark all served"
-          variant="outline"
-          fullWidth
-          leftIcon="checkmark-done-outline"
-          loading={setItemStatus.isPending}
-          onPress={handleMarkAllServed}
-        />
+        {canMarkServed ? (
+          <AppButton
+            label="Mark all served"
+            variant="outline"
+            fullWidth
+            leftIcon="checkmark-done-outline"
+            loading={setItemStatus.isPending}
+            onPress={handleMarkAllServed}
+          />
+        ) : null}
         <AppButton
           label="View bill preview"
           variant="outline"
@@ -708,6 +853,62 @@ export default function RunningOrderScreen() {
           loading={settle.isPending}
           leftIcon="checkmark-circle-outline"
           onPress={handleSettle}
+        />
+      </AppBottomSheet>
+
+      {/* Task #637 — Customer Note sheet */}
+      <AppBottomSheet
+        visible={noteOpen}
+        onClose={() => setNoteOpen(false)}
+        title="Customer note"
+        scrollable={false}
+      >
+        <AppText variant="small" color="mutedForeground">
+          Anything the kitchen should know? This gets attached to the first
+          item on the bill and shown on the next KOT round.
+        </AppText>
+        <AppInput
+          label="Note"
+          value={noteText}
+          onChangeText={setNoteText}
+          placeholder="e.g. extra spicy, no onion, allergic to peanuts"
+          multiline
+        />
+        <AppButton
+          label="Save note"
+          variant="primary"
+          fullWidth
+          leftIcon="save-outline"
+          loading={modifyItem.isPending}
+          onPress={handleSaveCustomerNote}
+        />
+      </AppBottomSheet>
+
+      {/* Task #637 — Call Manager sheet */}
+      <AppBottomSheet
+        visible={callMgrOpen}
+        onClose={() => setCallMgrOpen(false)}
+        title="Call manager"
+        scrollable={false}
+      >
+        <AppText variant="small" color="mutedForeground">
+          Send an alert to the manager on duty. They'll see it in their
+          Service Alerts feed and on their phone.
+        </AppText>
+        <AppInput
+          label="Reason (optional)"
+          value={callMgrNote}
+          onChangeText={setCallMgrNote}
+          placeholder="e.g. guest dispute, discount approval"
+          multiline
+        />
+        <AppButton
+          label={`Page manager · ${tableLabel}`}
+          variant="primary"
+          fullWidth
+          leftIcon="megaphone-outline"
+          loading={createStaffRequest.isPending}
+          onPress={handleCallManager}
         />
       </AppBottomSheet>
     </AppScreen>

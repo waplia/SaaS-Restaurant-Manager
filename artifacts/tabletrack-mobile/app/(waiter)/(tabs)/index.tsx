@@ -87,8 +87,24 @@ export default function TablesScreen() {
       <View style={[styles.header, { paddingTop: isWeb ? 67 : insets.top, borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>Tables</Text>
         <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-          {tableList.filter((t) => t.status === "occupied" || t.status === "bill_requested").length} in service ·{" "}
-          {tableList.filter((t) => t.status === "free" || t.status === "available").length} free
+          {(() => {
+            // Task #637 — group counts surface live floor pressure so the
+            // waiter knows where to look next: new orders waiting for KOT
+            // movement, plates ready at the pass, bill requests pending.
+            const occupied = tableList.filter((tt) => tt.status === "occupied" || tt.status === "bill_requested" || tt.status === "billed");
+            const free = tableList.filter((tt) => tt.status === "free" || tt.status === "available").length;
+            let newCount = 0, readyCount = 0, billReq = 0;
+            for (const tt of occupied) {
+              if (tt.status === "bill_requested") billReq += 1;
+              const s = summaries.get(tt.id);
+              if (s?.readyCount && s.readyCount > 0) readyCount += 1;
+              else if (s && s.pendingCount > 0 && s.preparingCount === 0) newCount += 1;
+            }
+            return `${occupied.length} in service · ${free} free` +
+              (readyCount ? ` · ${readyCount} ready` : "") +
+              (newCount ? ` · ${newCount} new` : "") +
+              (billReq ? ` · ${billReq} bill req` : "");
+          })()}
         </Text>
       </View>
 
@@ -138,11 +154,23 @@ export default function TablesScreen() {
             const heldEscalated = held
               ? (Date.now() - new Date(held.heldAt).getTime()) / 1000 >= 300
               : false;
+            // Task #637 — derive the on-screen status chip from the
+            // running-order summary so the floor map reads the full
+            // palette: Ordered → Preparing → Ready → Bill Requested →
+            // Paid, without losing the underlying floor-table state.
+            let effectiveStatus = status;
+            if (summary) {
+              if (summary.paymentStatus === "paid") effectiveStatus = "paid";
+              else if (status === "bill_requested" || status === "billed" || !!summary.billGeneratedAt) effectiveStatus = "bill_requested";
+              else if (summary.readyCount > 0) effectiveStatus = "ready";
+              else if (summary.preparingCount > 0) effectiveStatus = "preparing";
+              else if (summary.pendingCount > 0) effectiveStatus = "ordered";
+            }
             return (
               <TableCard
                 label={label}
                 capacity={t.capacity ?? 4}
-                status={status}
+                status={effectiveStatus}
                 runningTotal={summary?.runningTotal}
                 itemCount={summary?.itemCount}
                 elapsedMinutes={summary?.elapsedMinutes}

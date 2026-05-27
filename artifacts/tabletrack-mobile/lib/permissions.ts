@@ -48,7 +48,12 @@ export type PermissionAction =
   // Staff
   | "staff.invite"
   | "attendance.edit"
-  | "approval.act";
+  | "approval.act"
+  // Waiter floor-service actions (Task #637)
+  | "waiter.voice_order"
+  | "waiter.customer_note"
+  | "waiter.mark_served"
+  | "waiter.call_manager";
 
 const ROLE_PERMISSIONS: Record<StaffRole, ReadonlyArray<PermissionAction>> = {
   super_admin: [], // wildcard handled below
@@ -71,10 +76,12 @@ const ROLE_PERMISSIONS: Record<StaffRole, ReadonlyArray<PermissionAction>> = {
   ],
   waiter: [
     "order.create", "bill.print", "kot.reprint",
+    "waiter.voice_order", "waiter.customer_note", "waiter.mark_served", "waiter.call_manager",
   ],
   captain: [
     "order.create", "order.discount.apply", "bill.print", "bill.split",
     "kot.reprint", "payment.capture",
+    "waiter.voice_order", "waiter.customer_note", "waiter.mark_served", "waiter.call_manager",
   ],
   kitchen: [
     "kot.update_status", "kot.reprint",

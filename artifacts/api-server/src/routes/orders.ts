@@ -3235,19 +3235,40 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
 // changing the whole ticket. Mirrors timer fields onto the order item.
 router.patch(
   "/restaurants/:restaurantId/orders/:orderId/items/:itemId/kitchen-status",
-  requireRole("owner", "manager", "kitchen", "super_admin"),
+  // Task #637 — waiters now mark items served from the Ready queue and
+  // per-item bell on the running-order screen, so the waiter role is
+  // accepted here as well.
+  requireRole("owner", "manager", "kitchen", "waiter", "captain", "super_admin"),
   async (req, res) => {
     const restaurantId = Number(req.params.restaurantId);
     const orderId = Number(req.params.orderId);
     const itemId = Number(req.params.itemId);
-    const allowed = new Set(["pending", "preparing", "ready", "out_of_stock"]);
     const status = String(req.body?.status ?? "");
+
+    // Task #637 — Role-aware status allowlist. Waiter/captain may only
+    // flip items to "served" (the floor action). Kitchen/manager/owner
+    // retain the full kitchen state machine.
+    const role = String((req as { user?: { role?: string } }).user?.role ?? "");
+    const FLOOR_ALLOWED = new Set(["served"]);
+    const KITCHEN_ALLOWED = new Set(["pending", "preparing", "ready", "served", "out_of_stock"]);
+    const allowed = (role === "waiter" || role === "captain")
+      ? FLOOR_ALLOWED
+      : KITCHEN_ALLOWED;
     if (!allowed.has(status)) {
-      return void res.status(400).json({ error: "Invalid status", code: "INVALID_STATUS" });
+      return void res.status(403).json({ error: "Status not allowed for this role", code: "INVALID_STATUS" });
     }
     const [item] = await db.select().from(orderItemsTable)
       .where(and(eq(orderItemsTable.id, itemId), eq(orderItemsTable.orderId, orderId)));
     if (!item) return void res.status(404).json({ error: "Not found" });
+    // Task #637 — Waiter/captain can only move items from ready -> served.
+    // Prevents the floor from skipping the kitchen state machine and
+    // marking pending/preparing items as served from the dining room.
+    if ((role === "waiter" || role === "captain") && item.status !== "ready") {
+      return void res.status(409).json({
+        error: "Item is not ready to be served",
+        code: "NOT_READY",
+      });
+    }
     // Confirm the order belongs to this restaurant.
     const [order] = await db.select({ id: ordersTable.id }).from(ordersTable)
       .where(and(eq(ordersTable.id, orderId), eq(ordersTable.restaurantId, restaurantId)));

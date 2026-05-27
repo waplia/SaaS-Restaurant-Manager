@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "@/components/ui/AppAlert";
 import { View, Text, FlatList, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Platform, Modal, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -58,6 +58,7 @@ export default function NewOrderMenuScreen() {
     tableLabel?: string;
     existingOrderId?: string;
     runningOrder?: string;
+    voice?: string;
   }>();
   const routeTableId = params.tableId != null ? Number(params.tableId) : NaN;
   const routeTableLabel = typeof params.tableLabel === "string" ? params.tableLabel : null;
@@ -83,6 +84,7 @@ export default function NewOrderMenuScreen() {
   const [modifierItem, setModifierItem] = useState<ExtendedMenuItem | null>(null);
   const [busy, setBusy] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const voiceAutoOpenedRef = useRef(false);
   // When the parent order create succeeds but some item POSTs fail, we
   // remember the orderId + the idempotency key we used to create it. Retry
   // reuses both so we never create a duplicate parent order, and only the
@@ -138,6 +140,16 @@ export default function NewOrderMenuScreen() {
   });
   const settings = (settingsQ.data ?? {}) as Record<string, unknown>;
   const voiceOrderingEnabled = !!(settings as { enableVoiceOrdering?: boolean }).enableVoiceOrdering;
+  // Task #637 — when the running-order "Voice order" action navigates here
+  // with ?voice=1, auto-open the VoiceOrderModal once per navigation so the
+  // waiter can dictate immediately without a second tap.
+  useEffect(() => {
+    if (voiceAutoOpenedRef.current) return;
+    if (params.voice !== "1") return;
+    if (!voiceOrderingEnabled) return;
+    voiceAutoOpenedRef.current = true;
+    setVoiceOpen(true);
+  }, [params.voice, voiceOrderingEnabled]);
   const taxRate = Number(settings.taxRate ?? 0) / (Number(settings.taxRate ?? 0) > 1 ? 100 : 1);
   const serviceCharge = Number(settings.serviceCharge ?? 0) / (Number(settings.serviceCharge ?? 0) > 1 ? 100 : 1);
 

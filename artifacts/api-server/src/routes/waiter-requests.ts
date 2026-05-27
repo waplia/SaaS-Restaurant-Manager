@@ -60,10 +60,10 @@ import { pushToStaff } from "../lib/pushNotify";
 
 const router = Router();
 
-const VALID_TYPES = new Set(["call_waiter", "request_bill", "water", "custom"]);
+const VALID_TYPES = new Set(["call_waiter", "request_bill", "water", "custom", "call_manager"]);
 
 router.use("/restaurants/:restaurantId/waiter-requests",
-  requireRole("owner", "manager", "waiter", "kitchen", "super_admin"),
+  requireRole("owner", "manager", "waiter", "captain", "cashier", "kitchen", "super_admin"),
   validateRestaurantAccess,
 );
 
@@ -116,6 +116,86 @@ router.get("/restaurants/:restaurantId/waiter-requests", async (req, res) => {
     .orderBy(desc(waiterRequestsTable.createdAt));
   res.json(rows);
 });
+
+// Staff-initiated waiter request (e.g. waiter taps "Call Manager" from
+// the running-order screen). Mirrors the public diner-side helper so the
+// new entry shows up in the same Requests list and triggers the same
+// notification fan-out.
+router.post("/restaurants/:restaurantId/waiter-requests",
+  requireRole("owner", "manager", "waiter", "captain", "cashier", "super_admin"),
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const tableId = req.body?.tableId != null ? Number(req.body.tableId) : NaN;
+    const rawType = String(req.body?.type ?? "call_waiter");
+    const type = VALID_TYPES.has(rawType) ? rawType : "call_waiter";
+    const note = typeof req.body?.note === "string" ? req.body.note : null;
+
+    // The schema requires a non-null tableId — Call Manager and similar
+    // staff-initiated requests must still be attached to whichever
+    // table the staff member is standing at.
+    if (!Number.isFinite(tableId) || tableId <= 0) {
+      return void res.status(400).json({ error: "tableId is required" });
+    }
+
+    const [ft] = await db.select({ tableNumber: floorTablesTable.tableNumber })
+      .from(floorTablesTable)
+      .where(and(eq(floorTablesTable.id, tableId), eq(floorTablesTable.restaurantId, restaurantId)));
+    if (!ft) {
+      // Tenant isolation: refuse to create a request against a table that
+      // doesn't belong to this restaurant (or doesn't exist at all).
+      return void res.status(404).json({ error: "Table not found for this restaurant" });
+    }
+    const tableNumber: string | null = ft.tableNumber ?? null;
+
+    const [row] = await db.insert(waiterRequestsTable).values({
+      restaurantId,
+      tableId,
+      type,
+      note,
+      status: "pending",
+    }).returning();
+
+    const reasonLabel = type === "request_bill" ? "requesting bill"
+      : type === "water" ? "requesting water"
+      : type === "call_manager" ? "calling a manager"
+      : type === "custom" ? (note ? `says: ${note}` : "needs assistance")
+      : "calling a waiter";
+    await db.insert(notificationsTable).values({
+      restaurantId,
+      type: type === "call_manager" ? "manager_call" : "waiter_request",
+      title: tableNumber ? `Table ${tableNumber}` : "Floor staff",
+      message: tableNumber ? `Table ${tableNumber} is ${reasonLabel}` : `Floor staff ${reasonLabel}`,
+      entityId: row.id,
+      entityType: "waiter_request",
+    });
+
+    const payload = {
+      id: row.id, tableId, tableNumber, type, note, status: row.status,
+      createdAt: row.createdAt,
+    };
+    broadcastEvent(restaurantId, "waiter_request:new", payload);
+    sseBroadcast(restaurantId, "waiter_request:new", payload);
+    broadcastEvent(restaurantId, "notification:new", { type: type === "call_manager" ? "manager_call" : "waiter_request" });
+
+    // Route the push to whoever can act on it. PushType doesn't have a
+    // dedicated "manager_call" channel yet, so reuse the waiter_call
+    // sound/channel but target only manager/owner roles.
+    const targetRoles = type === "call_manager"
+      ? ["manager", "owner"] as const
+      : ["waiter", "manager", "owner"] as const;
+    pushToStaff(
+      { restaurantId, roles: [...targetRoles], type: "waiter_call" },
+      {
+        title: type === "call_manager" ? "Manager needed on the floor" :
+               type === "request_bill" ? "Bill requested" : "Table needs attention",
+        body: tableNumber ? `Table ${tableNumber}${note ? ` — ${note}` : ""}` : (note ?? "Floor staff needs help"),
+        data: { screen: "waiter_requests", requestId: row.id, tableId },
+      },
+    ).catch(() => {});
+
+    res.status(201).json(payload);
+  },
+);
 
 router.post("/restaurants/:restaurantId/waiter-requests/:id/acknowledge",
   requireRole("owner", "manager", "waiter", "super_admin"),
