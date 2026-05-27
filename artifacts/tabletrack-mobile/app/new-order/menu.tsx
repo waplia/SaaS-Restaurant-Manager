@@ -243,27 +243,37 @@ export default function NewOrderMenuScreen() {
 
     setBusy(true);
     try {
-      // Reuse the existing parent order on retry instead of creating a new
-      // one. The createKey is also kept stable across retries so even the
-      // create-order call itself is dedupable on the server side if the
-      // previous attempt reached the DB but the response was lost.
+      // Single POST /orders with the entire cart. The server's merge logic
+      // (see routes/orders.ts L805+) detects a running order on the table
+      // and appends ALL items as one kot_batch / one kitchen ticket per
+      // kitchen — what previously took N per-item POSTs (and produced N
+      // duplicate KDS tickets) is now one round.
       //
-      // Task #602: when isAppendMode is true we skip the createOrder call
-      // entirely and POST items directly against the running order id.
-      let orderId = pendingOrder?.orderId ?? (isAppendMode ? appendOrderId : null);
+      // The same X-Idempotency-Key is reused across retries so a lost
+      // response doesn't double-create the order. We no longer carry
+      // per-line keys because there's only one server call.
       const createKey = pendingOrder?.createKey ?? mobileUid();
+      const body: Record<string, unknown> = {
+        orderType: orderTypeForApi,
+        items: cart.items.map((line) => ({
+          menuItemId: line.menuItemId,
+          quantity: line.quantity,
+          notes: line.note ?? undefined,
+          modifiers: (line.modifiers ?? []).length > 0
+            ? (line.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }))
+            : undefined,
+        })),
+      };
+      if (resolvedTableId) body.tableId = resolvedTableId;
+      // Prefer the payload passed straight from the cart sheet — this
+      // avoids a race where freshly-typed name/address haven't yet
+      // propagated through React context by the time we read cart.customer.
+      const customerForSend = customerOverride ?? cart.customer ?? null;
+      if (customerForSend?.name) body.customerName = customerForSend.name;
+      if (customerForSend?.phone) body.customerPhone = customerForSend.phone;
+      if (customerForSend?.address) body.deliveryAddress = customerForSend.address;
 
-      if (orderId == null) {
-        const body: Record<string, unknown> = { orderType: orderTypeForApi, items: [] };
-        if (resolvedTableId) body.tableId = resolvedTableId;
-        // Prefer the payload passed straight from the cart sheet — this
-        // avoids a race where freshly-typed name/address haven't yet
-        // propagated through React context by the time we read cart.customer.
-        const customerForSend = customerOverride ?? cart.customer ?? null;
-        if (customerForSend?.name) body.customerName = customerForSend.name;
-        if (customerForSend?.phone) body.customerPhone = customerForSend.phone;
-        if (customerForSend?.address) body.deliveryAddress = customerForSend.address;
-
+      try {
         const created = await withTimeout((signal) =>
           customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
             method: "POST",
@@ -272,89 +282,22 @@ export default function NewOrderMenuScreen() {
             signal,
           }),
         );
-        orderId = created.id;
-        // Persist immediately so a crash/abort between item POSTs still
-        // gives the user a recoverable, non-duplicating retry path.
-        setPendingOrder({ orderId, createKey });
-      }
-
-      // Per-line outcomes. Each item POST carries a stable per-line
-      // idempotency key (derived from lineId), so retrying a line that
-      // actually landed on the server last time will return the cached
-      // response instead of double-billing the order.
-      const succeededLineIds: string[] = [];
-      const failed: Array<{ name: string; reason: string }> = [];
-      // Task #602 — When the server returns 409 REQUIRES_APPROVAL
-      // (post-bill add with require_approval policy), keep those lines
-      // in the cart and surface a manager-PIN prompt at the end.
-      const needsApproval: string[] = [];
-      const postedOrderId = orderId;
-      for (const line of cart.items) {
-        const mods = (line.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
-        const itemKey = `item_${postedOrderId}_${line.lineId}`;
-        try {
-          await withTimeout((signal) =>
-            customFetch(`/api/restaurants/${restaurantId}/orders/${postedOrderId}/items`, {
-              method: "POST",
-              body: JSON.stringify({
-                menuItemId: line.menuItemId,
-                quantity: line.quantity,
-                modifiers: mods.length ? mods : undefined,
-                notes: line.note ?? undefined,
-              }),
-              headers: { "X-Idempotency-Key": itemKey },
-              signal,
-            }),
-          );
-          succeededLineIds.push(line.lineId);
-        } catch (itemErr) {
-          const e = itemErr as { status?: number; data?: { error?: string; code?: string } | null; message?: string };
-          const code = e?.data && typeof e.data === "object" ? e.data.code : undefined;
-          if (code === "REQUIRES_APPROVAL" || e?.status === 409) {
-            needsApproval.push(line.lineId);
-            continue;
-          }
-          // Drop closed-order failures from the cart — retrying them
-          // can never succeed; the order is sealed.
-          const msg = (e?.data && typeof e.data === "object" && typeof e.data.error === "string")
-            ? e.data.error
-            : (itemErr instanceof RequestTimeoutError ? "Timed out" : (e?.message ?? "Failed"));
-          if (
-            code === "BILL_ALREADY_GENERATED" ||
-            /completed|cancelled|already (?:settled|paid)/i.test(msg)
-          ) {
-            failed.push({ name: line.name, reason: msg });
-            succeededLineIds.push(line.lineId); // drop from cart
-            continue;
-          }
-          failed.push({ name: line.name, reason: msg });
+        setPendingOrder({ orderId: created.id, createKey });
+      } catch (sendErr) {
+        const e = sendErr as { status?: number; data?: { error?: string; code?: string } | null; message?: string };
+        const code = e?.data && typeof e.data === "object" ? e.data.code : undefined;
+        if (code === "REQUIRES_APPROVAL" || e?.status === 409) {
+          // Surface the manager-PIN prompt for the whole cart; on PIN
+          // retry we resend the full cart with managerPin in the body.
+          setPendingApprovalLines(cart.items.map((l) => l.lineId));
+          setManagerPin("");
+          setPinModalOpen(true);
+          return;
         }
+        throw sendErr;
       }
 
       qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });
-
-      // Prune successfully-sent lines from the cart so a retry only re-sends
-      // the failures. This keeps the alert copy honest ("retry won't
-      // duplicate") and matches what the user sees in the cart sheet.
-      for (const id of succeededLineIds) removeLine(id);
-
-      if (needsApproval.length > 0) {
-        setPendingApprovalLines(needsApproval);
-        setManagerPin("");
-        setPinModalOpen(true);
-        return;
-      }
-
-      if (failed.length > 0) {
-        const lines = failed.map((f) => `• ${f.name} — ${f.reason}`).join("\n");
-        Alert.alert(
-          "Some items didn't go through",
-          `The order was created${resolvedTableLabel ? ` for ${resolvedTableLabel}` : ""}, but these items failed:\n\n${lines}\n\nTap Send to Kitchen again to retry — already-sent items have been removed from your cart and won't be duplicated.`,
-        );
-        // Keep the cart open and the pendingOrder reference so the next
-        // tap retries against the SAME order instead of creating a new one.
-        return;
-      }
 
       // Full success — clear the resumable handle so the next order starts
       // from scratch.

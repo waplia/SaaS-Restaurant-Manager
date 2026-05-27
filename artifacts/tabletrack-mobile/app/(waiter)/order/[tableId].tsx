@@ -300,54 +300,43 @@ export default function WaiterOrderScreen() {
   const submitOrderItems = async (
     cartItems: CartItem[],
     targetTableId: number,
-    existingOrderId?: number,
-    itemKeys?: string[],
+    _existingOrderId?: number,
+    _itemKeys?: string[],
     orderIdempotencyKey?: string,
   ): Promise<void> => {
-    let orderId = existingOrderId;
-    if (!orderId) {
-      // When replaying a queued order we go through customFetch directly so
-      // we can attach X-Idempotency-Key for the parent order create —
-      // generated mutations from api-client-react don't expose header
-      // overrides. The server can then dedupe if a previous attempt had
-      // actually reached the DB but its response was lost mid-flight.
-      //
-      // Either path is wrapped in withTimeout so a hung network call is
-      // aborted and the caller's spinner is guaranteed to clear instead of
-      // spinning indefinitely.
-      if (orderIdempotencyKey) {
-        const created = await withTimeout((signal) =>
-          customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
-            method: "POST",
-            body: JSON.stringify({ tableId: targetTableId, orderType: "dine_in", items: [] }),
-            headers: { "X-Idempotency-Key": orderIdempotencyKey },
-            signal,
-          }),
-        );
-        orderId = created.id;
-      } else {
-        const newOrder = await withTimeout((signal) =>
-          createOrder(restaurantId, { tableId: targetTableId, orderType: "dine_in", items: [] }, { signal }),
-        );
-        orderId = newOrder.id;
-      }
-    }
-    for (let i = 0; i < cartItems.length; i++) {
-      const item = cartItems[i];
-      const mods = (item.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }));
-      const key = itemKeys?.[i];
+    // Always send the entire cart in ONE POST /orders. The server merges
+    // automatically into the table's running order when one exists (and
+    // fires a SINGLE kot_batch / kitchen ticket per kitchen). Looping
+    // through /items POSTs created a separate KOT round per item — the
+    // KDS then showed the same order N times (one per cart line), which
+    // is exactly the duplication this fix removes.
+    //
+    // existingOrderId / per-item idempotency keys are intentionally
+    // dropped: the parent X-Idempotency-Key already dedupes the full
+    // cart on retry, and the table-session merge logic guarantees
+    // appended items land on the running order instead of opening a
+    // new one.
+    const items = cartItems.map((item) => ({
+      menuItemId: item.menuItemId,
+      quantity: item.quantity,
+      notes: item.note ?? undefined,
+      modifiers: (item.modifiers ?? []).length > 0
+        ? (item.modifiers ?? []).map((m) => ({ modifierId: m.modifierId, quantity: 1 }))
+        : undefined,
+    }));
+    const body = { tableId: targetTableId, orderType: "dine_in", items };
+    if (orderIdempotencyKey) {
       await withTimeout((signal) =>
-        customFetch(`/api/restaurants/${restaurantId}/orders/${orderId}/items`, {
+        customFetch(`/api/restaurants/${restaurantId}/orders`, {
           method: "POST",
-          body: JSON.stringify({
-            menuItemId: item.menuItemId,
-            quantity: item.quantity,
-            modifiers: mods.length ? mods : undefined,
-            notes: item.note ?? undefined,
-          }),
-          headers: key ? { "X-Idempotency-Key": key } : undefined,
+          body: JSON.stringify(body),
+          headers: { "X-Idempotency-Key": orderIdempotencyKey },
           signal,
         }),
+      );
+    } else {
+      await withTimeout((signal) =>
+        createOrder(restaurantId, body as unknown as Parameters<typeof createOrder>[1], { signal }),
       );
     }
     qc.invalidateQueries({ queryKey: getListOrdersQueryKey(restaurantId) });

@@ -174,8 +174,12 @@ function compactDate(businessDate: string): string {
   return businessDate.replace(/-/g, "");
 }
 
-function padSequence(seq: number, paddingDigits: 3 | 4): string {
-  return String(seq).padStart(paddingDigits, "0");
+function padSequence(seq: number, _paddingDigits: 3 | 4): string {
+  // Display numbers must NOT carry leading zeros — staff read these aloud
+  // ("order DN-4") and the zero padding becomes a nuisance once daily volume
+  // crosses 999 anyway. The internal number (KL-R…-DN-000004) still pads for
+  // sortability; only the human-facing short form is unpadded.
+  return String(seq);
 }
 
 /**
