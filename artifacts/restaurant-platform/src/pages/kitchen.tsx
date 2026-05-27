@@ -138,7 +138,10 @@ function TicketCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="font-bold">{ticket.orderNumber}</p>
+            <p className="font-bold">{ticket.orderDisplayNumber ?? ticket.orderNumber}</p>
+            {ticket.orderDisplayNumber && ticket.orderInternalNumber && (
+              <span className="font-mono text-[10px] text-muted-foreground/70">{ticket.orderInternalNumber}</span>
+            )}
             {hasAlertedDelay && (
               <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded-full animate-pulse">
                 <AlertTriangle className="w-3 h-3" /> DELAYED {overdueMinutes > 0 ? `+${overdueMinutes}m` : ""}

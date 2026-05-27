@@ -353,7 +353,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     {t.isPriority && <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />}
                     <div>
-                      <p className="text-sm font-medium text-foreground">{t.orderNumber}</p>
+                      <p className="text-sm font-medium text-foreground">{t.orderDisplayNumber ?? t.orderNumber}</p>
                       <p className="text-xs text-muted-foreground">
                         {t.tableNumber ? `Table ${t.tableNumber}` : t.orderType} · {t.items?.length ?? 0} items
                       </p>

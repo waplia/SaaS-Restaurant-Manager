@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, boolean, decimal, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean, decimal, index, jsonb, uniqueIndex, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { restaurantsTable } from "./restaurants";
@@ -17,6 +17,19 @@ export const ordersTable = pgTable("orders", {
   tableId: integer("table_id").references(() => floorTablesTable.id),
   waiterId: integer("waiter_id").references(() => usersTable.id),
   orderNumber: text("order_number").notNull(),
+  // Task #647 — Dual order numbering. `orderDisplayNumber` is the short
+  // per-day, per-outlet, per-type ticket number guests/staff see and call
+  // out (e.g. "DN-023", "TK-024"). `orderInternalNumber` is the permanent
+  // globally-unique id used in payments/audit/exports — never resets.
+  // `dailySequence`/`orderTypePrefix`/`outletCode`/`businessDate` are
+  // stored so we can rebuild the display number deterministically and
+  // unique-index sequences by (restaurant, branch, businessDate, prefix).
+  orderDisplayNumber: text("order_display_number"),
+  orderInternalNumber: text("order_internal_number"),
+  dailySequence: integer("daily_sequence"),
+  orderTypePrefix: text("order_type_prefix"),
+  outletCode: text("outlet_code"),
+  businessDate: date("business_date"),
   orderType: text("order_type").notNull().default("dine_in"),
   status: text("status").notNull().default("pending"),
   paymentStatus: text("payment_status").notNull().default("unpaid"),
@@ -285,3 +298,29 @@ export const kotBatchesTable = pgTable("kot_batches", {
 
 export type KotBatch = typeof kotBatchesTable.$inferSelect;
 export type InsertKotBatch = typeof kotBatchesTable.$inferInsert;
+
+// Task #647 — Per-outlet daily counters used to mint the short
+// `orderDisplayNumber` (e.g. DN-023). One row per
+// (restaurantId, branchId, businessDate, orderTypePrefix). The atomic
+// `UPDATE … SET lastSequence = lastSequence + 1 RETURNING lastSequence`
+// pattern (or INSERT … ON CONFLICT … DO UPDATE) guarantees no duplicate
+// numbers even under concurrent inserts on the same outlet+day+type.
+// `branchId` defaults to 0 (sentinel for "no branch" / legacy) so the
+// unique index treats unbranched outlets as a single bucket.
+export const orderSequencesTable = pgTable("order_sequences", {
+  id: serial("id").primaryKey(),
+  restaurantId: integer("restaurant_id").notNull().references(() => restaurantsTable.id),
+  branchId: integer("branch_id").notNull().default(0),
+  businessDate: date("business_date").notNull(),
+  orderTypePrefix: text("order_type_prefix").notNull(),
+  lastSequence: integer("last_sequence").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, t => [
+  uniqueIndex("order_sequences_outlet_day_type_unique").on(
+    t.restaurantId, t.branchId, t.businessDate, t.orderTypePrefix,
+  ),
+]);
+
+export type OrderSequence = typeof orderSequencesTable.$inferSelect;
+export type InsertOrderSequence = typeof orderSequencesTable.$inferInsert;

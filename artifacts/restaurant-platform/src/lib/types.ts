@@ -138,6 +138,8 @@ export interface KitchenTicket {
   id: number;
   orderId: number;
   orderNumber: string;
+  orderDisplayNumber?: string | null;
+  orderInternalNumber?: string | null;
   tableNumber: string | null;
   orderType: string;
   status: string;
@@ -203,6 +205,8 @@ export interface AuditLogEntry {
 export interface Order {
   id: number;
   orderNumber: string;
+  orderDisplayNumber?: string | null;
+  orderInternalNumber?: string | null;
   tableId: number | null;
   orderType: string;
   status: string;

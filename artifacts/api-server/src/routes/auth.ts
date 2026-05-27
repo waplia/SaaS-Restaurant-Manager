@@ -202,6 +202,8 @@ router.post("/auth/register", registerLimitByIp, validate({ body: RegisterBodySt
       // (without preset reasons it 422s every manual discount).
       const { seedDefaultDiscountSettings } = await import("../lib/discounts");
       await seedDefaultDiscountSettings(r.id, u.id, tx);
+      const { seedDefaultOrderNumberingSettings } = await import("../lib/orderNumbers");
+      await seedDefaultOrderNumberingSettings(r.id, u.id);
 
       return { t, r, u };
     });

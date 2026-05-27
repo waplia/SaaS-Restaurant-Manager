@@ -52,10 +52,13 @@ import { getVapidPublicKey, upsertWebPushSubscription, deleteWebPushSubscription
 import { webPushLogsTable } from "../lib/db";
 import { markLogClicked } from "../lib/webPush";
 import { loadLoyaltyConfig, pickTier, getLifetimeEarned, getRecentLoyaltyHistory } from "../lib/loyalty";
+import { mintOrderNumbers } from "../lib/orderNumbers";
 
 const router = Router();
 
 function generateOrderNumber(): string {
+  // Legacy fallback — production order paths now mint dual numbers via
+  // mintOrderNumbers() (Task #647).
   return `ORD-${Date.now().toString(36).toUpperCase()}`;
 }
 
@@ -597,8 +600,17 @@ router.post("/public/orders", async (req, res) => {
         // waiter taps Accept. See createKotBatchForItems below.
         openedBy: "qr",
       }).returning();
+      const __minted = await mintOrderNumbers({ restaurantId, branchId: null, orderType: "qr" });
       const [newOrder] = await tx.insert(ordersTable).values({
-        restaurantId, tableId, orderNumber: generateOrderNumber(), orderType: "dine_in",
+        restaurantId, tableId,
+        orderNumber: __minted.orderNumber,
+        orderDisplayNumber: __minted.orderDisplayNumber,
+        orderInternalNumber: __minted.orderInternalNumber,
+        dailySequence: __minted.dailySequence,
+        orderTypePrefix: __minted.orderTypePrefix,
+        outletCode: __minted.outletCode,
+        businessDate: __minted.businessDate,
+        orderType: "dine_in",
         tableSessionId: sess.id, isRunningOrder: true,
         subtotal: "0.00", taxAmount: "0.00", serviceCharge: "0.00", discountAmount: "0.00",
         totalAmount: "0.00",
@@ -640,8 +652,17 @@ router.post("/public/orders", async (req, res) => {
       order = updated;
     }
   } else {
+    const __minted = await mintOrderNumbers({ restaurantId, branchId: null, orderType: resolvedOrderType });
     [order] = await db.insert(ordersTable).values({
-      restaurantId, tableId: tableId ?? null, orderNumber: generateOrderNumber(), orderType: resolvedOrderType,
+      restaurantId, tableId: tableId ?? null,
+      orderNumber: __minted.orderNumber,
+      orderDisplayNumber: __minted.orderDisplayNumber,
+      orderInternalNumber: __minted.orderInternalNumber,
+      dailySequence: __minted.dailySequence,
+      orderTypePrefix: __minted.orderTypePrefix,
+      outletCode: __minted.outletCode,
+      businessDate: __minted.businessDate,
+      orderType: resolvedOrderType,
       tableSessionId: null,
       isRunningOrder: false,
       subtotal: subtotal.toFixed(2), taxAmount: taxAmount.toFixed(2),

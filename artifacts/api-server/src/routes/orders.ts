@@ -6,6 +6,7 @@ import { db, ordersTable, orderItemsTable, orderItemModifiersTable, kitchenTicke
 import { recordAuditLog } from "../lib/audit";
 import { toE164 } from "@workspace/phone-utils";
 import { triggerAutoPost } from "./accounting-books";
+import { mintOrderNumbers } from "../lib/orderNumbers";
 
 // Lightweight per-request feature check (used to gate optional order-lifecycle
 // side effects so plans without the entitlement see no behavior change).
@@ -314,6 +315,9 @@ const router = Router();
 router.use("/restaurants/:restaurantId", requireRole("owner", "manager", "waiter", "cashier", "kitchen", "delivery_executive", "super_admin"), validateRestaurantAccess);
 
 function generateOrderNumber(): string {
+  // Legacy fallback only — kept for back-compat with code paths that
+  // haven't been migrated to mintOrderNumbers() yet (Task #647). All
+  // production order-create paths must mint dual numbers instead.
   return `ORD-${Date.now().toString(36).toUpperCase()}`;
 }
 
@@ -811,13 +815,20 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
         openedBy: "staff",
         staffVerifiedAt: new Date(),
       }).returning();
+      const __minted = await mintOrderNumbers({ restaurantId, branchId: resolvedBranchId, orderType: "dine_in" });
       const [newOrder] = await tx.insert(ordersTable).values({
         tableSessionId: sess.id,
         isRunningOrder: true,
         restaurantId,
         branchId: resolvedBranchId,
         tableId: Number(tableId),
-        orderNumber: generateOrderNumber(),
+        orderNumber: __minted.orderNumber,
+        orderDisplayNumber: __minted.orderDisplayNumber,
+        orderInternalNumber: __minted.orderInternalNumber,
+        dailySequence: __minted.dailySequence,
+        orderTypePrefix: __minted.orderTypePrefix,
+        outletCode: __minted.outletCode,
+        businessDate: __minted.businessDate,
         orderType: "dine_in",
         notes,
         customerName,
@@ -973,14 +984,22 @@ router.post("/restaurants/:restaurantId/orders", idempotency(), async (req, res)
     }).where(eq(ordersTable.id, lockedNewOrder.id)).returning();
     order = updated;
   } else {
+  const __resolvedOrderType = orderType ?? (ckContext ? "delivery" : "dine_in");
+  const __minted = await mintOrderNumbers({ restaurantId, branchId: resolvedBranchId, orderType: __resolvedOrderType });
   const [insertedOrder] = await db.insert(ordersTable).values({
     tableSessionId: newTableSessionId,
     isRunningOrder: isDineIn && roSettings?.enabled ? true : false,
     restaurantId,
     branchId: resolvedBranchId,
     tableId,
-    orderNumber: generateOrderNumber(),
-    orderType: orderType ?? (ckContext ? "delivery" : "dine_in"),
+    orderNumber: __minted.orderNumber,
+    orderDisplayNumber: __minted.orderDisplayNumber,
+    orderInternalNumber: __minted.orderInternalNumber,
+    dailySequence: __minted.dailySequence,
+    orderTypePrefix: __minted.orderTypePrefix,
+    outletCode: __minted.outletCode,
+    businessDate: __minted.businessDate,
+    orderType: __resolvedOrderType,
     notes,
     customerName,
     customerPhone,
@@ -2962,6 +2981,8 @@ router.get("/restaurants/:restaurantId/kitchen/tickets", requirePlanFeature("kit
     return {
       ...t,
       orderNumber: order?.orderNumber ?? "",
+      orderDisplayNumber: order?.orderDisplayNumber ?? null,
+      orderInternalNumber: order?.orderInternalNumber ?? null,
       tableNumber,
       orderType: order?.orderType ?? "dine_in",
       paymentStatus: order?.paymentStatus ?? null,

@@ -4,6 +4,7 @@ import { db, restaurantsTable, branchesTable, subscriptionPlansTable, tenantsTab
 import { requireRole } from "../middleware/authorize";
 import { seedDefaultExpenseCategories } from "./expenses";
 import { seedDefaultDiscountSettings } from "../lib/discounts";
+import { seedDefaultOrderNumberingSettings } from "../lib/orderNumbers";
 import { recordAuditLog } from "../lib/audit";
 
 const router = Router();
@@ -65,6 +66,7 @@ router.post("/restaurants", requireRole("owner", "super_admin"), async (req, res
   // flow works on day one (without preset reasons it rejects every manual
   // discount with a 422). Idempotent: no-op if owner already customised.
   await seedDefaultDiscountSettings(restaurant.id, req.user?.sub ?? null);
+  await seedDefaultOrderNumberingSettings(restaurant.id, req.user?.sub ?? null);
   await recordAuditLog({
     req, module: "restaurants", action: "restaurant.create", entity: "restaurant",
     entityId: restaurant.id, restaurantId: restaurant.id, targetRestaurantId: restaurant.id,

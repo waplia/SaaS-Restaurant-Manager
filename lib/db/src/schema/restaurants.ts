@@ -118,6 +118,10 @@ export const branchesTable = pgTable("branches", {
   isMain: boolean("is_main").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   cloudKitchenEnabled: boolean("cloud_kitchen_enabled").notNull().default(false),
+  // Task #647 — Short outlet code (3-6 chars, uppercase) baked into the
+  // permanent `orderInternalNumber` (`KL-{outletCode}-YYYYMMDD-NNNNNN`).
+  // Owner-editable from Settings; auto-derived from branch name on create.
+  outletCode: text("outlet_code"),
   // Per-outlet UPI override (Task #600). When `upiId` is set on a branch the
   // bill resolver uses it instead of the restaurant-level UPI; merchant name
   // falls back the same way. `upiQrEnabled` here is tri-state: null = inherit

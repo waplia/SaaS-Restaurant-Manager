@@ -31,7 +31,7 @@ const SECTION_PLAN_FEATURE: Partial<Record<SectionKey, string>> = {
 const OWNER_ONLY_KEYS = new Set<SectionKey>([
   "general", "email", "payment", "billing", "roles", "ai", "theme",
   "currencies", "taxes", "loyalty", "discounts", "whatsapp", "web-push",
-  "upi-qr",
+  "upi-qr", "order-numbering",
 ]);
 
 const ALLOWED_KEYS = new Set<SectionKey>([
@@ -39,7 +39,7 @@ const ALLOWED_KEYS = new Set<SectionKey>([
   "email", "taxes", "payment", "theme", "roles", "billing",
   "reservation", "about-us", "customer-site", "receipt", "printer",
   "downloads", "menu-image", "delivery", "allergens", "kot",
-  "cancellation-reasons", "order-settings", "refund-reasons",
+  "cancellation-reasons", "order-settings", "order-numbering", "refund-reasons",
   "ai", "kiosk", "loyalty", "discounts", "whatsapp", "web-push",
   "direct-ordering", "upi-qr",
 ]);
@@ -133,6 +133,7 @@ function renderSection(key: SectionKey) {
     case "kot": return <KotSection />;
     case "cancellation-reasons": return <CancellationReasonsSection />;
     case "order-settings": return <><OrderSettingsSection /><GuestVerificationSection /></>;
+    case "order-numbering": return <OrderNumberingSection />;
     case "refund-reasons": return <RefundReasonsSection />;
     case "direct-ordering": return <DirectOrderingSection />;
     case "ai": return <AiSection />;
@@ -2165,6 +2166,63 @@ function OrderSettingsSection() {
           </Row>
           <Toggle label="Hold-and-fire mode" hint="Items wait until staff fires them, instead of going straight to KDS." checked={s.holdAndFire} onChange={v => set(p => ({ ...p, holdAndFire: v }))} />
           <Toggle label="Course-by-course service" hint="Group items into courses (Starter / Main / Dessert) and fire one at a time." checked={s.courseService} onChange={v => set(p => ({ ...p, courseService: v }))} />
+        </>
+      )}
+    </SettingForm>
+  );
+}
+
+/* ---------------- 24c. Order Numbering (Task #647) ----------------
+ * Short daily display numbers per outlet (e.g. DN-023, TK-024) plus a
+ * permanent internal id (KL-OUTLET-YYYYMMDD-NNNNNN). All six toggles
+ * default ON so a brand new restaurant gets the modern behaviour out
+ * of the box; owners can revert to the legacy single-id behaviour or
+ * customise prefixes from here.
+ */
+interface OrderNumberingCfg {
+  enabled: boolean;
+  showDisplayNumberToGuests: boolean;
+  showInternalNumberInAudit: boolean;
+  resetDaily: boolean;
+  zeroPadDisplay: boolean;
+  prefixes: { dine_in: string; takeaway: string; delivery: string; qr: string; reservation: string; tiffin: string; catering: string };
+}
+function OrderNumberingSection() {
+  const defaults: OrderNumberingCfg = {
+    enabled: true,
+    showDisplayNumberToGuests: true,
+    showInternalNumberInAudit: true,
+    resetDaily: true,
+    zeroPadDisplay: true,
+    prefixes: { dine_in: "DN", takeaway: "TK", delivery: "DL", qr: "QR", reservation: "RS", tiffin: "TF", catering: "CT" },
+  };
+  return (
+    <SettingForm section="order-numbering" defaults={defaults}>
+      {(s, set) => (
+        <>
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            Short daily ticket numbers (e.g. <strong>DN-023</strong>) are called out at counters and shown on KOTs.
+            A permanent internal id (e.g. <strong>KL-MAIN-{new Date().toISOString().slice(0,10).replace(/-/g,"")}-000123</strong>) is used for payments and audit exports.
+          </div>
+          <Toggle label="Enable dual order numbering" hint="Off = single legacy id only." checked={s.enabled} onChange={v => set(p => ({ ...p, enabled: v }))} />
+          <Toggle label="Show display number to guests" hint="On QR menu, receipts and SMS." checked={s.showDisplayNumberToGuests} onChange={v => set(p => ({ ...p, showDisplayNumberToGuests: v }))} />
+          <Toggle label="Show internal number in audit / exports" checked={s.showInternalNumberInAudit} onChange={v => set(p => ({ ...p, showInternalNumberInAudit: v }))} />
+          <Toggle label="Reset daily counter at business-day rollover" checked={s.resetDaily} onChange={v => set(p => ({ ...p, resetDaily: v }))} />
+          <Toggle label="Zero-pad display numbers (DN-023 vs DN-23)" checked={s.zeroPadDisplay} onChange={v => set(p => ({ ...p, zeroPadDisplay: v }))} />
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label className="text-sm font-semibold">Prefixes per order type</Label>
+            <Row>
+              <Field label="Dine-in"><Input maxLength={4} value={s.prefixes.dine_in} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, dine_in: e.target.value.toUpperCase() } }))} /></Field>
+              <Field label="Takeaway"><Input maxLength={4} value={s.prefixes.takeaway} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, takeaway: e.target.value.toUpperCase() } }))} /></Field>
+              <Field label="Delivery"><Input maxLength={4} value={s.prefixes.delivery} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, delivery: e.target.value.toUpperCase() } }))} /></Field>
+              <Field label="QR"><Input maxLength={4} value={s.prefixes.qr} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, qr: e.target.value.toUpperCase() } }))} /></Field>
+            </Row>
+            <Row>
+              <Field label="Reservation"><Input maxLength={4} value={s.prefixes.reservation} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, reservation: e.target.value.toUpperCase() } }))} /></Field>
+              <Field label="Tiffin"><Input maxLength={4} value={s.prefixes.tiffin} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, tiffin: e.target.value.toUpperCase() } }))} /></Field>
+              <Field label="Catering"><Input maxLength={4} value={s.prefixes.catering} onChange={e => set(p => ({ ...p, prefixes: { ...p.prefixes, catering: e.target.value.toUpperCase() } }))} /></Field>
+            </Row>
+          </div>
         </>
       )}
     </SettingForm>

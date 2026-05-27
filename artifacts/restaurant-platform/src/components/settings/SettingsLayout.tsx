@@ -21,7 +21,7 @@ export type SectionKey =
   | "cancellation-reasons" | "order-settings" | "order-capacity" | "refund-reasons" | "direct-ordering"
   | "ai" | "kiosk" | "loyalty" | "discounts" | "kitchens" | "devices" | "subscription" | "whatsapp" | "web-push" | "token-display" | "upi-qr"
   | "api-keys" | "webhooks" | "webhook-logs" | "api-logs" | "developer-docs" | "oauth-apps"
-  | "accounting" | "account" | "sessions" | "customer-app" | "guest-verification";
+  | "accounting" | "account" | "sessions" | "customer-app" | "guest-verification" | "order-numbering";
 
 type IconType = typeof Building2;
 
@@ -56,6 +56,7 @@ export const SETTINGS_GROUPS: SectionGroup[] = [
     items: [
       { key: "app", label: "POS Preferences", icon: Cog },
       { key: "order-settings", label: "Order Settings", icon: ListChecks },
+      { key: "order-numbering", label: "Order Numbering", icon: Hash, ownerOnly: true },
       { key: "order-capacity", label: "Order Capacity & Throttling", icon: ListChecks, href: "/settings/order-capacity" },
       { key: "kot", label: "KOT", icon: Utensils },
       { key: "receipt", label: "Invoice / Receipt", icon: Receipt },

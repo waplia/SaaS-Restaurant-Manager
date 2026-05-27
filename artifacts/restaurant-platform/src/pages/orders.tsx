@@ -49,9 +49,12 @@ function OrderCard({ order, onOpen, heldForVerification }: { order: Order; onOpe
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-foreground text-sm">{order.orderNumber}</p>
+            <p className="font-semibold text-foreground text-sm">{order.orderDisplayNumber ?? order.orderNumber}</p>
             {order.isPriority && <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />}
           </div>
+          {order.orderDisplayNumber && (order.orderInternalNumber ?? order.orderNumber) && (
+            <p className="text-[10px] text-muted-foreground/70 font-mono mt-0.5">{order.orderInternalNumber ?? order.orderNumber}</p>
+          )}
           <p className="text-xs text-muted-foreground mt-0.5">
             {order.tableId ? `Table ${order.tableId}` : order.orderType} · {format(new Date(order.createdAt), "h:mm a")}
           </p>
@@ -191,7 +194,7 @@ function CurbsideCard({ order, onHandover, handing }: { order: Order; onHandover
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-foreground text-sm">{order.orderNumber}</p>
+            <p className="font-semibold text-foreground text-sm">{order.orderDisplayNumber ?? order.orderNumber}</p>
             <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full capitalize", STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground")}>
               {order.status.replace(/_/g, " ")}
             </span>
