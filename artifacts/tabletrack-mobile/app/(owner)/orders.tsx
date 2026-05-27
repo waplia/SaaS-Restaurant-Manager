@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 
 type StatusFilter = "all" | "new" | "preparing" | "ready" | "completed";
-type TypeFilter = "all" | "qr" | "dine_in" | "takeaway" | "delivery";
+type TypeFilter = "all" | "qr" | "dine_in" | "takeaway" | "delivery" | "curbside";
 type DateFilter = "today" | "yesterday" | "7d" | "30d" | "this_month" | "custom" | "all";
 type CustomRange = { from: Date; to: Date };
 
@@ -34,6 +34,7 @@ const TYPE_CHIPS: { key: TypeFilter; label: string; icon?: keyof typeof Ionicons
   { key: "dine_in", label: "Dine-in", icon: "restaurant-outline" },
   { key: "takeaway", label: "Takeaway", icon: "bag-handle-outline" },
   { key: "delivery", label: "Delivery", icon: "bicycle-outline" },
+  { key: "curbside", label: "Curbside", icon: "car-outline" },
 ];
 const DATE_CHIPS: { key: DateFilter; label: string }[] = [
   { key: "today", label: "Today" },
