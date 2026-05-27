@@ -14,7 +14,17 @@ import { OfflineBanner } from "@/components/OfflineBanner";
 import { DeviceStatusStrip } from "@/components/cashier/DeviceStatusStrip";
 import { useAuth } from "@/context/AuthContext";
 
-const READY_TO_PAY = "served,ready,delivered";
+// Cashier counter queue. The previous filter (`status: "served,ready,delivered"`)
+// was a no-op because `orders.status` never holds any of those values — those
+// strings live on `kitchen_tickets.status` and `order_items.status`, not on the
+// order row. As a result every cashier saw "0 tickets" even when there were
+// served-but-unpaid tables waiting.
+//
+// The correct filter is "any unpaid open order": orders that are still in the
+// running-bill / bill-generated lifecycle (i.e. not completed/cancelled) AND
+// whose paymentStatus is anything other than `paid`.
+const CASHIER_OPEN_STATUSES = "pending,bill_generated";
+const CASHIER_UNPAID = "unpaid,partially_paid";
 
 type Order = {
   id: number;
@@ -34,13 +44,26 @@ export default function CashierPaymentsScreen() {
   const { restaurantId, outletScopeId, accessToken } = useAuth();
   const scopedId = outletScopeId ?? restaurantId;
 
+  // The generated `ListOrdersParams` type only declares `status` and a few
+  // basics, but the server (`GET /restaurants/:id/orders`) accepts
+  // `paymentStatus` as a comma-separated multi-value filter too — the URL
+  // builder forwards every key on the params object verbatim. Cast through
+  // unknown so we can pass the extra filter without regenerating the client.
+  const queryParams = {
+    status: CASHIER_OPEN_STATUSES,
+    paymentStatus: CASHIER_UNPAID,
+  } as unknown as Parameters<typeof listOrders>[1];
+
   const { data, refetch, isRefetching, isLoading } = useQuery({
-    queryKey: getListOrdersQueryKey(scopedId, { status: READY_TO_PAY }),
-    queryFn: () => listOrders(scopedId, { status: READY_TO_PAY }),
+    queryKey: getListOrdersQueryKey(scopedId, queryParams),
+    queryFn: () => listOrders(scopedId, queryParams),
     refetchInterval: 15_000,
     enabled: !!scopedId && !!accessToken,
   });
 
+  // Defensive client-side filter: even though the server already excludes
+  // `paid` rows, keep the safety net so a stale cache or a race-y refetch
+  // never surfaces a fully-paid ticket on the counter.
   const unpaid = useMemo(() => {
     const raw = (data?.data ?? []) as unknown as Order[];
     return raw.filter((o) => o.paymentStatus !== "paid");
