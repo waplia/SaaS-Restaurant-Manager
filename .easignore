@@ -1,0 +1,76 @@
+# === Other artifacts (mobile build doesn't need these) ===
+artifacts/api-server/
+artifacts/customer-wallet/
+artifacts/marketing-site/
+artifacts/restaurant-platform/
+artifacts/mockup-sandbox/
+artifacts/desktop-pos/
+# === All node_modules everywhere (EAS reinstalls on server) ===
+**/node_modules/
+node_modules/
+# === Build outputs ===
+**/dist/
+**/build/
+**/.next/
+**/.expo/
+**/.expo-shared/
+**/web-build/
+**/.turbo/
+**/.cache/
+**/coverage/
+dist/
+build/
+# === Native build artifacts ===
+**/ios/build/
+**/ios/Pods/
+**/ios/DerivedData/
+**/android/build/
+**/android/app/build/
+**/android/.gradle/
+# === Desktop electron outputs ===
+**/desktop/dist/
+**/desktop/out/
+**/desktop/release/
+**/*.dmg
+**/*.exe
+**/*.AppImage
+# === Git, IDE, OS ===
+.git/
+.github/
+.vscode/
+.idea/
+.DS_Store
+**/.DS_Store
+Thumbs.db
+# === Logs / temp ===
+*.log
+**/*.log
+.local/
+.replit-local/
+tmp/
+.tmp/
+# === Env files ===
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+# === Tests ===
+**/__tests__/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+# === Docs / markdown ===
+**/*.md
+docs/
+# === Large media not used by mobile ===
+**/attached_assets/
+**/screenshots/
+**/exports/
+# === pnpm cache ===
+.pnpm-store/
+**/.pnpm-store/
+# === Misc lockfiles for other tools ===
+**/package-lock.json
+**/yarn.lock

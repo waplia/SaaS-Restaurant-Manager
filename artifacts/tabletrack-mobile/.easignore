@@ -1,47 +1,33 @@
-# .easignore — controls what gets uploaded to EAS Build for this artifact.
-# When present, this REPLACES .gitignore for EAS upload selection.
-# Goal: ship only what's needed to build the mobile app from a pnpm monorepo.
-
-# ---- Heavy repo-root junk we never need on EAS ----
-.git/
-.gitignore
-attached_assets/
-.local/
-.cache/
-.pnpm-store/
-.replit
-.replit-artifact/
-replit.md
-*.log
-
-# ---- Root-level node_modules (EAS will re-install) ----
 node_modules/
-
-# ---- Other artifacts (NOT needed to build the mobile app) ----
-artifacts/api-server/
-artifacts/customer-wallet/
-artifacts/marketing-site/
-artifacts/restaurant-platform/
-artifacts/mockup-sandbox/
-
-# ---- Within tabletrack-mobile itself ----
-artifacts/tabletrack-mobile/node_modules/
-artifacts/tabletrack-mobile/.expo/
-artifacts/tabletrack-mobile/dist/
-artifacts/tabletrack-mobile/build/
-artifacts/tabletrack-mobile/static-build/
-artifacts/tabletrack-mobile/server/
-artifacts/tabletrack-mobile/MOBILE_AUDIT.md
-artifacts/tabletrack-mobile/scripts/
-
-# ---- General junk ----
-**/.DS_Store
-**/Thumbs.db
-**/.vscode/
-**/.idea/
-**/coverage/
-**/*.tsbuildinfo
-**/.turbo/
-**/.next/
-**/dist/
-**/build/
+.expo/
+.expo-shared/
+dist/
+web-build/
+build/
+*.log
+ios/build/
+android/build/
+android/app/build/
+android/.gradle/
+ios/Pods/
+ios/DerivedData/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.env
+.env.local
+.env.*.local
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+coverage/
+*.md
+docs/
+# Do NOT ignore:
+# google-services.json
+# GoogleService-Info.plist
+# app.json
+# eas.json
