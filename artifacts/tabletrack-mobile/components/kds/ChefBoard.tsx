@@ -264,7 +264,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
     try {
       await updateStatus.mutateAsync({ restaurantId, id: ticket.id, data: { status: nextStatus } });
       qc.invalidateQueries({ queryKey });
-      const label = `KOT #${ticket.orderNumber ?? ticket.id}`;
+      const label = `KOT #${ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}`;
       showToast(
         "success",
         nextStatus === "preparing" ? `${label} accepted` :
@@ -303,7 +303,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
         body: JSON.stringify({ reason }),
         headers: { "content-type": "application/json" },
       });
-      showToast("info", `Delay reason logged for KOT #${target.orderNumber ?? target.id}`);
+      showToast("info", `Delay reason logged for KOT #${target.orderDisplayNumber ?? target.orderNumber ?? target.id}`);
     } catch (err) {
       showToast("error", (err as Error).message || "Couldn't log delay reason");
     }
@@ -326,7 +326,9 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
         payload: {
           paperSize: ticket.kitchen?.paperSize ?? "80mm",
           kotNumber: String(ticket.id),
-          orderNumber: ticket.orderNumber ? String(ticket.orderNumber) : undefined,
+          orderNumber: ticket.orderDisplayNumber
+            ? String(ticket.orderDisplayNumber)
+            : (ticket.orderNumber ? String(ticket.orderNumber) : undefined),
           tableLabel: ticket.tableNumber ?? undefined,
           customerName: ticket.customerName ?? undefined,
           orderType: ticket.orderType ?? undefined,
@@ -541,7 +543,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
 
       <DelayReasonSheet
         visible={!!delayTarget}
-        kotLabel={delayTarget ? `KOT #${delayTarget.orderNumber ?? delayTarget.id}` : ""}
+        kotLabel={delayTarget ? `KOT #${delayTarget.orderDisplayNumber ?? delayTarget.orderNumber ?? delayTarget.id}` : ""}
         onClose={() => setDelayTarget(null)}
         onSubmit={submitDelayReason}
       />

@@ -72,6 +72,8 @@ export default function ReadyQueueScreen() {
     tableId: number;
     tableLabel: string;
     orderId: number;
+    /** Short per-day display number ("DN-023") preferred for the order
+     *  header — long internal number is reserved for invoices. */
     orderNumber: string;
     items: ReadyItem[];
     oldestSinceMin: number;
@@ -98,7 +100,7 @@ export default function ReadyQueueScreen() {
         tableId,
         tableLabel: tableLabelById.get(tableId) ?? `T${tableId}`,
         orderId: s.orderId,
-        orderNumber: s.orderNumber,
+        orderNumber: s.orderDisplayNumber ?? s.orderNumber,
         items,
         oldestSinceMin: items[0]?.readySinceMin ?? 0,
       });

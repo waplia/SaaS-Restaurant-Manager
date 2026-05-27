@@ -289,7 +289,7 @@ function KdsView() {
         nextStatus === "preparing" ? "preparing"
         : nextStatus === "ready" ? "ready"
         : null;
-      const orderLabel = `#${ticket.orderNumber ?? ticket.id}`;
+      const orderLabel = `#${ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}`;
       const verb =
         nextStatus === "preparing" ? "moved to Preparing"
         : nextStatus === "ready" ? "ready to serve"
@@ -380,7 +380,9 @@ function KdsView() {
         payload: {
           paperSize: ticket.kitchen?.paperSize ?? "80mm",
           kotNumber: String(ticket.id),
-          orderNumber: ticket.orderNumber ? String(ticket.orderNumber) : undefined,
+          orderNumber: ticket.orderDisplayNumber
+            ? String(ticket.orderDisplayNumber)
+            : (ticket.orderNumber ? String(ticket.orderNumber) : undefined),
           tableLabel: ticket.tableNumber ?? undefined,
           customerName: ticket.customerName ?? undefined,
           orderType: ticket.orderType ?? undefined,
@@ -438,7 +440,15 @@ function KdsView() {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     const list = buckets.byTab.history
       .filter((t) => new Date(t.createdAt ?? Date.now()).getTime() > cutoff)
-      .filter((t) => !q || String(t.orderNumber ?? t.id).toLowerCase().includes(q))
+      // Search matches BOTH the short display number guests/staff use AND
+      // the long permanent internal number that appears on invoices.
+      .filter((t) => {
+        if (!q) return true;
+        const display = String(t.orderDisplayNumber ?? "").toLowerCase();
+        const internal = String(t.orderInternalNumber ?? "").toLowerCase();
+        const legacy = String(t.orderNumber ?? t.id).toLowerCase();
+        return display.includes(q) || internal.includes(q) || legacy.includes(q);
+      })
       .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime());
     const groups = new Map<string, KdsTicket[]>();
     for (const t of list) {
@@ -726,7 +736,7 @@ function KdsView() {
 
       <KdsCancelSheet
         visible={!!cancelTarget}
-        orderLabel={cancelTarget ? `#${cancelTarget.orderNumber ?? cancelTarget.id}` : ""}
+        orderLabel={cancelTarget ? `#${cancelTarget.orderDisplayNumber ?? cancelTarget.orderNumber ?? cancelTarget.id}` : ""}
         submitting={cancelSubmitting}
         onClose={() => !cancelSubmitting && setCancelTarget(null)}
         onSubmit={submitCancel}

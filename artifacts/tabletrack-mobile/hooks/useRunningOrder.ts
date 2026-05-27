@@ -32,6 +32,12 @@ export type RunningOrderResponse = {
     | (Record<string, unknown> & {
         id: number;
         orderNumber: string;
+        /** Task #647 — short per-day display number (e.g. "DN-023") shown to
+         *  operational staff. Falls back to `orderNumber` when unset. */
+        orderDisplayNumber?: string | null;
+        /** Task #647 — permanent globally-unique number used on invoices /
+         *  audit exports. Never shown on operational screens. */
+        orderInternalNumber?: string | null;
         status: string;
         paymentStatus: string;
         tableId: number | null;
@@ -167,6 +173,10 @@ export type RunningOrderSummary = {
   tableId: number;
   orderId: number;
   orderNumber: string;
+  /** Task #647 — short per-day ticket number ("DN-023") shown to waiters /
+   *  kitchen. Falls back to `orderNumber` when the dual-numbering migration
+   *  hasn't backfilled an older order yet. */
+  orderDisplayNumber: string | null;
   status: string;
   paymentStatus: string;
   runningTotal: string;
@@ -236,6 +246,7 @@ export function useRunningOrdersSummary(tableIds: number[]) {
       tableId,
       orderId: order.id,
       orderNumber: order.orderNumber,
+      orderDisplayNumber: order.orderDisplayNumber ?? null,
       status: order.status,
       paymentStatus: order.paymentStatus,
       runningTotal: String(order.runningTotal ?? order.totalAmount ?? "0"),

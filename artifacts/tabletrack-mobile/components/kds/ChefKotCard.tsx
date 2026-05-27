@@ -126,7 +126,7 @@ function ChefKotCardImpl({
         <View style={{ flex: 1, gap: 6 }}>
           <View style={styles.titleRow}>
             <Text style={[styles.kotNum, { color: ticket.isDelayed ? "#fecaca" : colors.foreground }]}>
-              KOT #{ticket.orderNumber ?? ticket.id}
+              KOT #{ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}
             </Text>
             {ticket.isPriority ? (
               <View style={styles.priorityBadge}>

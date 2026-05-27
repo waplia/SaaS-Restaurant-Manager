@@ -510,7 +510,7 @@ export default function WaiterOrderScreen() {
         >
           <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
           <Text style={[styles.activeOrderText, { color: colors.primary }]}>
-            Active order #{(activeOrder as unknown as { orderNumber?: string }).orderNumber ?? activeOrder.id}
+            Active order #{(activeOrder as unknown as { orderDisplayNumber?: string | null; orderNumber?: string }).orderDisplayNumber ?? (activeOrder as unknown as { orderNumber?: string }).orderNumber ?? activeOrder.id}
           </Text>
           <View style={styles.billChip}>
             <Ionicons name="receipt-outline" size={13} color={colors.primary} />

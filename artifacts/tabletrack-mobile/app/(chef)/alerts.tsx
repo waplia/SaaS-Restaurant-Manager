@@ -50,7 +50,7 @@ export default function ChefAlertsScreen() {
     for (const t of tickets) {
       const elapsed = t.elapsedMinutes ?? Math.floor((Date.now() - new Date(t.createdAt ?? Date.now()).getTime()) / 60000);
       const status = String(t.status);
-      const label = `KOT #${t.orderNumber ?? t.id}`;
+      const label = `KOT #${t.orderDisplayNumber ?? t.orderNumber ?? t.id}`;
       if (status === "cancelled") {
         out.push({
           id: `t-${t.id}-cancelled`, kind: "cancelled",

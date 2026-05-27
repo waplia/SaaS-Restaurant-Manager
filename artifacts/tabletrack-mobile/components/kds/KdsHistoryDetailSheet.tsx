@@ -35,7 +35,7 @@ export function KdsHistoryDetailSheet({ ticket, onClose }: { ticket: KdsTicket |
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: colors.foreground }]}>
-              Order #{ticket.orderNumber ?? ticket.id}
+              Order #{ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}
             </Text>
             <Text style={[styles.sub, { color: colors.mutedForeground }]}>
               {ticket.tableNumber ? `Table ${ticket.tableNumber}` : ticket.customerName ?? "Walk-in"}

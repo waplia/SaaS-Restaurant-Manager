@@ -3151,6 +3151,8 @@ components:
         tableId: { type: ["integer", "null"] }
         waiterId: { type: ["integer", "null"] }
         orderNumber: { type: string }
+        orderDisplayNumber: { type: ["string", "null"] }
+        orderInternalNumber: { type: ["string", "null"] }
         orderType: { type: string }
         status: { type: string }
         paymentStatus: { type: string }
@@ -3175,6 +3177,8 @@ components:
         restaurantId: { type: integer }
         tableId: { type: ["integer", "null"] }
         orderNumber: { type: string }
+        orderDisplayNumber: { type: ["string", "null"] }
+        orderInternalNumber: { type: ["string", "null"] }
         orderType: { type: string }
         status: { type: string }
         paymentStatus: { type: string }
@@ -3349,6 +3353,8 @@ components:
         completedAt: { type: ["string", "null"] }
         createdAt: { type: string }
         orderNumber: { type: string }
+        orderDisplayNumber: { type: ["string", "null"] }
+        orderInternalNumber: { type: ["string", "null"] }
         tableNumber: { type: ["string", "null"] }
         orderType: { type: string }
         items:

@@ -569,6 +569,10 @@ export interface Order {
   /** @nullable */
   waiterId?: number | null;
   orderNumber: string;
+  /** @nullable */
+  orderDisplayNumber?: string | null;
+  /** @nullable */
+  orderInternalNumber?: string | null;
   orderType?: string;
   status: string;
   paymentStatus?: string;
@@ -647,6 +651,10 @@ export interface OrderDetail {
   /** @nullable */
   tableId?: number | null;
   orderNumber: string;
+  /** @nullable */
+  orderDisplayNumber?: string | null;
+  /** @nullable */
+  orderInternalNumber?: string | null;
   orderType?: string;
   status: string;
   paymentStatus?: string;
@@ -820,6 +828,10 @@ export interface KitchenTicket {
   completedAt?: string | null;
   createdAt?: string;
   orderNumber?: string;
+  /** @nullable */
+  orderDisplayNumber?: string | null;
+  /** @nullable */
+  orderInternalNumber?: string | null;
   /** @nullable */
   tableNumber?: string | null;
   orderType?: string;
