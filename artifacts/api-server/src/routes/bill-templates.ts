@@ -18,8 +18,8 @@
  * everywhere immediately.
  */
 import { Router } from "express";
-import { and, eq } from "drizzle-orm";
-import { db, billTemplatesTable, ordersTable } from "../lib/db";
+import { and, eq, isNull } from "drizzle-orm";
+import { db, billTemplatesTable, ordersTable, printersTable, printJobsTable } from "../lib/db";
 import { requireRole } from "../middleware/authorize";
 import { validateRestaurantAccess } from "../middleware/restaurantAccess";
 import {
@@ -31,6 +31,9 @@ import {
 } from "../lib/billTemplates";
 import { getOrBuildBillSnapshot, buildSampleBillSnapshot } from "../lib/billSnapshot";
 import { renderBillHTML, renderBillText } from "../lib/billRender";
+import { sendEmail, sendWhatsApp } from "../lib/notifications";
+import { recordAuditLog } from "../lib/audit";
+import { broadcastEvent } from "../lib/socketio";
 import { BILL_CHANNELS, type BillChannel } from "@workspace/db/schema";
 
 const router = Router();
@@ -169,6 +172,120 @@ router.post(
     const html = renderBillHTML(snapshot, template, { watermark: "PREVIEW" });
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.send(html);
+  },
+);
+
+/**
+ * Task #677 — Send a sample invoice to a chosen phone (WhatsApp) or email.
+ * Renders the template against the synthetic sample snapshot and ships the
+ * resulting HTML so owners can see exactly what customers will receive.
+ */
+router.post(
+  "/restaurants/:restaurantId/bill-templates/:id/send-test",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const id = Number(req.params.id);
+    const channel = String(req.body?.channel ?? "").toLowerCase();
+    const to = String(req.body?.to ?? "").trim();
+    if (!to) return void res.status(400).json({ error: "Recipient is required" });
+    if (channel !== "whatsapp" && channel !== "email") {
+      return void res.status(400).json({ error: "channel must be 'whatsapp' or 'email'" });
+    }
+    const template = await getTemplateById(restaurantId, id);
+    if (!template) return void res.status(404).json({ error: "Template not found" });
+    const snapshot = await buildSampleBillSnapshot(restaurantId);
+    if (!snapshot) return void res.status(404).json({ error: "Restaurant not found" });
+    const html = renderBillHTML(snapshot, template, { watermark: "TEST INVOICE" });
+    const text = renderBillText(snapshot, template);
+
+    try {
+      if (channel === "email") {
+        await sendEmail({
+          to,
+          subject: `Test invoice — ${template.name}`,
+          html,
+          text,
+        });
+      } else {
+        const previewLine = `Test invoice from ${snapshot.restaurant.name} using template "${template.name}". Total: ${snapshot.totals.grandTotal.toFixed(2)} ${snapshot.restaurant.currency || "INR"}.`;
+        await sendWhatsApp({
+          to,
+          body: `${previewLine}\n\n${text}`,
+          restaurantId,
+          meta: { kind: "bill_template_test", templateId: id },
+        });
+      }
+      await recordAuditLog({
+        req, module: "bill-templates", action: "bill_template.test_sent",
+        entity: "bill_template", entityId: id, restaurantId,
+        details: `Sent test invoice via ${channel} to ${to}`,
+      });
+      res.json({ ok: true, channel, to });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Send failed" });
+    }
+  },
+);
+
+/**
+ * Task #677 — Queue a "Test print" job for the chosen printer using the
+ * template's sample snapshot. The desktop bridge / mobile app picks the
+ * job up via the existing print-job queue.
+ */
+router.post(
+  "/restaurants/:restaurantId/bill-templates/:id/test-print",
+  requireRole("owner", "manager", "super_admin"),
+  validateRestaurantAccess,
+  async (req, res) => {
+    const restaurantId = Number(req.params.restaurantId);
+    const id = Number(req.params.id);
+    const printerId = Number(req.body?.printerId);
+    if (!printerId) return void res.status(400).json({ error: "printerId is required" });
+
+    const [printer] = await db.select().from(printersTable)
+      .where(and(
+        eq(printersTable.id, printerId),
+        eq(printersTable.restaurantId, restaurantId),
+        isNull(printersTable.deletedAt),
+      ));
+    if (!printer) return void res.status(404).json({ error: "Printer not found" });
+    if (!printer.enabled) return void res.status(400).json({ error: "Printer is disabled" });
+
+    const template = await getTemplateById(restaurantId, id);
+    if (!template) return void res.status(404).json({ error: "Template not found" });
+    const snapshot = await buildSampleBillSnapshot(restaurantId);
+    if (!snapshot) return void res.status(404).json({ error: "Restaurant not found" });
+    const html = renderBillHTML(snapshot, template, { watermark: "TEST PRINT" });
+    const text = renderBillText(snapshot, template);
+
+    const [job] = await db.insert(printJobsTable).values({
+      restaurantId,
+      branchId: printer.branchId,
+      printerId,
+      printType: "test",
+      payload: {
+        type: "bill_template_test",
+        templateId: id,
+        templateName: template.name,
+        paperSize: template.paperSize,
+        html,
+        text,
+      },
+      status: "queued",
+      copies: 1,
+      requestedBy: req.user?.sub ?? null,
+      requestedByName: req.user?.email ?? null,
+    }).returning();
+
+    await recordAuditLog({
+      req, module: "bill-templates", action: "bill_template.test_print",
+      entity: "bill_template", entityId: id, restaurantId,
+      details: `Queued test print for printer #${printerId} (job #${job.id})`,
+    });
+    broadcastEvent(restaurantId, "print-job:new", { id: job.id, printerId });
+    res.json({ ok: true, jobId: job.id });
   },
 );
 

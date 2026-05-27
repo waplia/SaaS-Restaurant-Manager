@@ -76,8 +76,15 @@ export function renderBillHTML(
   }
   for (const line of layout.headerLines ?? []) headerBits.push(line);
 
+  // A4/A5 column visibility (thermal stays 2-col regardless of these toggles).
+  const colHsn = layout.showHsn === true;
+  const colQty = layout.showQty !== false;
+  const colRate = layout.showRate !== false;
+  const colTax = layout.showTax === true;
+  type ItemLike = (typeof snapshot.items)[number] & { hsn?: string; taxRate?: number };
   const itemRows = snapshot.items
     .map(it => {
+      const item = it as ItemLike;
       const mods = layout.showModifiers !== false
         ? (it.modifiers ?? [])
             .map(m => `<div class="mod"><span>+ ${escapeHtml(m.name)}</span><span class="num">${m.price ? money(m.price, currency) : ""}</span></div>`)
@@ -100,30 +107,34 @@ export function renderBillHTML(
           ${mods}${notes}`;
       }
       if (isKot) {
-        return `<tr><td colspan="4"><div class="iname">${it.quantity}\u00d7 ${escapeHtml(it.name)}</div>${mods}${notes}</td></tr>`;
+        return `<tr><td colspan="6"><div class="iname">${it.quantity}\u00d7 ${escapeHtml(it.name)}</div>${mods}${notes}</td></tr>`;
       }
-      return `
-        <tr>
-          <td><div class="iname">${escapeHtml(it.name)}</div>${mods}${notes}</td>
-          <td class="num">${it.quantity}</td>
-          <td class="num">${money(it.unitPrice, currency)}</td>
-          <td class="num">${money(it.lineTotal, currency)}</td>
-        </tr>`;
+      const cells: string[] = [];
+      cells.push(`<td><div class="iname">${escapeHtml(it.name)}</div>${mods}${notes}</td>`);
+      if (colHsn) cells.push(`<td class="num">${escapeHtml(item.hsn ?? "")}</td>`);
+      if (colQty) cells.push(`<td class="num">${it.quantity}</td>`);
+      if (colRate) cells.push(`<td class="num">${money(it.unitPrice, currency)}</td>`);
+      if (colTax) cells.push(`<td class="num">${item.taxRate != null ? `${item.taxRate}%` : ""}</td>`);
+      cells.push(`<td class="num">${money(it.lineTotal, currency)}</td>`);
+      return `<tr>${cells.join("")}</tr>`;
     })
     .join("");
 
+  const headerCells: string[] = [`<th>Item</th>`];
+  if (!isKot) {
+    if (colHsn) headerCells.push(`<th class="num">HSN</th>`);
+    if (colQty) headerCells.push(`<th class="num">Qty</th>`);
+    if (colRate) headerCells.push(`<th class="num">Unit</th>`);
+    if (colTax) headerCells.push(`<th class="num">Tax%</th>`);
+    headerCells.push(`<th class="num">Total</th>`);
+  }
   const itemsBlock = isThermal
     ? `<div class="sep"></div>
        ${isKot ? "" : `<div class="row col-head"><span>ITEM</span><span>AMT</span></div><div class="sep"></div>`}
        ${itemRows}
        <div class="sep"></div>`
     : `<table class="items">
-        <thead>
-          <tr>
-            <th>Item</th>
-            ${isKot ? "" : `<th class="num">Qty</th><th class="num">Unit</th><th class="num">Total</th>`}
-          </tr>
-        </thead>
+        <thead><tr>${headerCells.join("")}</tr></thead>
         <tbody>${itemRows}</tbody>
       </table>`;
 
@@ -145,12 +156,23 @@ export function renderBillHTML(
     if (totals.deliveryFee > 0) {
       totalsRows.push(`<div class="row"><span>Delivery</span><span class="num">${money(totals.deliveryFee, currency)}</span></div>`);
     }
-    if (layout.showTaxBreakdown !== false && totals.taxBreakdown.length > 0) {
-      for (const t of totals.taxBreakdown) {
-        totalsRows.push(`<div class="row"><span>Tax (${escapeHtml(t.rate)})</span><span class="num">${money(t.amount, currency)}</span></div>`);
+    const taxStyle: NonNullable<BillTemplateLayout["taxBreakdownStyle"]> =
+      layout.taxBreakdownStyle
+      ?? (layout.showTaxBreakdown === false ? "summary" : (totals.taxBreakdown.length > 0 ? "per_rate" : "summary"));
+    if (taxStyle !== "none") {
+      if (taxStyle === "split_cgst_sgst" && totals.taxBreakdown.length > 0) {
+        for (const t of totals.taxBreakdown) {
+          const half = Math.round((t.amount / 2) * 100) / 100;
+          totalsRows.push(`<div class="row"><span>CGST (${escapeHtml(t.rate)})</span><span class="num">${money(half, currency)}</span></div>`);
+          totalsRows.push(`<div class="row"><span>SGST (${escapeHtml(t.rate)})</span><span class="num">${money(t.amount - half, currency)}</span></div>`);
+        }
+      } else if (taxStyle === "per_rate" && totals.taxBreakdown.length > 0) {
+        for (const t of totals.taxBreakdown) {
+          totalsRows.push(`<div class="row"><span>Tax (${escapeHtml(t.rate)})</span><span class="num">${money(t.amount, currency)}</span></div>`);
+        }
+      } else if (totals.taxAmount > 0) {
+        totalsRows.push(`<div class="row"><span>Tax</span><span class="num">${money(totals.taxAmount, currency)}</span></div>`);
       }
-    } else if (totals.taxAmount > 0) {
-      totalsRows.push(`<div class="row"><span>Tax</span><span class="num">${money(totals.taxAmount, currency)}</span></div>`);
     }
     if (totals.tipAmount > 0) {
       totalsRows.push(`<div class="row"><span>Tip</span><span class="num">${money(totals.tipAmount, currency)}</span></div>`);
@@ -190,9 +212,10 @@ export function renderBillHTML(
   }
 
   const orderNumber = snapshot.order.orderDisplayNumber || snapshot.order.orderNumber;
+  const effectiveLogoUrl = layout.logoUrl || snapshot.restaurant.logoUrl;
   const headerHtml = `
     <div class="header center">
-      ${layout.showLogo !== false && snapshot.restaurant.logoUrl ? `<img src="${escapeHtml(snapshot.restaurant.logoUrl)}" class="logo" alt=""/>` : ""}
+      ${layout.showLogo !== false && effectiveLogoUrl ? `<img src="${escapeHtml(effectiveLogoUrl)}" class="logo" alt=""/>` : ""}
       <div class="brand">${escapeHtml(restName)}</div>
       ${headerBits.length ? `<div class="sub">${headerBits.map(escapeHtml).join(isThermal ? "<br/>" : " \u00b7 ")}</div>` : ""}
       <div class="doctype">${escapeHtml(docTitle)}</div>
@@ -241,13 +264,16 @@ export function renderBillHTML(
     : "";
 
   const accent = layout.accentColor || "#ea580c";
+  const lineSpacing = layout.lineSpacing && layout.lineSpacing > 0 ? layout.lineSpacing : 1;
+  const thermalFont = layout.fontSizePx && layout.fontSizePx > 0 ? layout.fontSizePx : (isThermal58 ? 11 : 12);
+  const pageFont = layout.fontSizePx && layout.fontSizePx > 0 ? layout.fontSizePx : 11;
 
   const css = isThermal
     ? `
       @page { size: ${paperWidth} auto; margin: 0; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { background: #fff; color: #000; }
-      body { font-family: 'Courier New', ui-monospace, monospace; font-size: ${isThermal58 ? 11 : 12}px; width: ${paperWidth}; padding: 4mm 3mm; position: relative; }
+      body { font-family: 'Courier New', ui-monospace, monospace; font-size: ${thermalFont}px; line-height: ${lineSpacing * 1.2}; width: ${paperWidth}; padding: 4mm 3mm; position: relative; }
       .center { text-align: center; }
       .bold { font-weight: 700; }
       .sep { border-top: 1px dashed #555; margin: 6px 0; }
@@ -269,7 +295,7 @@ export function renderBillHTML(
       @page { size: ${paper === "a4" ? "A4" : "A5"}; margin: ${paper === "a4" ? "14mm" : "10mm"}; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { background: #fff; color: #1a1a1a; }
-      body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; position: relative; }
+      body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: ${pageFont}pt; line-height: ${lineSpacing * 1.35}; position: relative; }
       .num { font-variant-numeric: tabular-nums; font-family: 'SF Mono', Menlo, Consolas, monospace; white-space: nowrap; }
       .center { text-align: center; }
       .bold { font-weight: 700; }

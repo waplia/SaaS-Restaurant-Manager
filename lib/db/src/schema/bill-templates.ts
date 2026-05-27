@@ -83,6 +83,24 @@ export interface BillTemplateLayout {
   isKot?: boolean;
   /** Brand accent color for the A4/A5 header bar (hex). Ignored on thermal. */
   accentColor?: string;
+  /** Base font size (pt for A4/A5, px for thermal). Overrides the default. */
+  fontSizePx?: number;
+  /** Line spacing multiplier applied to body rows (1.0 = default). */
+  lineSpacing?: number;
+  /** Per-template logo override URL. Falls back to restaurant.logoUrl. */
+  logoUrl?: string;
+  /** Column visibility for the items table (A4/A5; thermal always 2-col). */
+  showHsn?: boolean;
+  showQty?: boolean;
+  showRate?: boolean;
+  showTax?: boolean;
+  /** Tax breakdown rendering style:
+   *   "none"            — hide tax lines entirely
+   *   "summary"         — one "Tax" line with the total tax amount
+   *   "per_rate"        — one line per rate (e.g. "Tax (5%)", "Tax (18%)")
+   *   "split_cgst_sgst" — per rate, split into CGST/SGST halves
+   */
+  taxBreakdownStyle?: "none" | "summary" | "per_rate" | "split_cgst_sgst";
 }
 
 export const insertBillTemplateSchema = createInsertSchema(billTemplatesTable).omit({
