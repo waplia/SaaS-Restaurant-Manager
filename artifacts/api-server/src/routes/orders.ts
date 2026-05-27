@@ -3364,7 +3364,72 @@ router.patch(
       orderId, itemId, status, startedAt: updated.startedAt, readyAt: updated.readyAt,
     });
 
-    // Mirror back to the kitchen ticket so the KDS reflects floor actions.
+    // Mirror back to the kitchen ticket so the KDS reflects per-item
+    // transitions. Two cascades:
+    //   - status === "ready": once every (non-cancelled) item belonging to a
+    //     ticket is ready, auto-move the ticket itself to "ready" so the
+    //     waiter Ready queue lights up without the chef having to press a
+    //     separate "complete KOT" button. While at least one item is still
+    //     pending/preparing, nudge the ticket into "preparing" so the
+    //     status pill stops showing "new".
+    //   - status === "served": once every item is served, close the ticket
+    //     (existing behaviour, retained below).
+    if (status === "ready" || status === "preparing") {
+      try {
+        const [menuRow] = updated.menuItemId != null
+          ? await db.select({ kitchenId: menuItemsTable.kitchenId })
+              .from(menuItemsTable).where(eq(menuItemsTable.id, updated.menuItemId))
+          : [];
+        const ticketScope = menuRow?.kitchenId != null
+          ? and(eq(kitchenTicketsTable.orderId, orderId), eq(kitchenTicketsTable.kitchenId, menuRow.kitchenId))
+          : eq(kitchenTicketsTable.orderId, orderId);
+        const tickets = await db.select().from(kitchenTicketsTable)
+          .where(and(ticketScope, notInArray(kitchenTicketsTable.status, ["ready", "served", "cancelled"])));
+        const siblings = await db.select({
+          id: orderItemsTable.id,
+          status: orderItemsTable.status,
+          menuItemId: orderItemsTable.menuItemId,
+          kotBatchId: orderItemsTable.kotBatchId,
+        }).from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+        const siblingMenuIds = Array.from(new Set(
+          siblings.map(s => s.menuItemId).filter((x): x is number => x != null),
+        ));
+        const siblingKitchenRows = siblingMenuIds.length > 0
+          ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId })
+              .from(menuItemsTable).where(inArray(menuItemsTable.id, siblingMenuIds))
+          : [];
+        const itemKitchenById = new Map(siblingKitchenRows.map(r => [r.id, r.kitchenId] as const));
+
+        for (const t of tickets) {
+          const inThisTicket = siblings.filter(s => {
+            if (s.status === "cancelled") return false;
+            if (t.kotBatchId != null) return s.kotBatchId === t.kotBatchId;
+            if (t.kitchenId == null) return true;
+            if (s.menuItemId == null) return true;
+            const mk = itemKitchenById.get(s.menuItemId);
+            return mk == null || mk === t.kitchenId;
+          });
+          if (inThisTicket.length === 0) continue;
+          const allReady = inThisTicket.every(s => s.status === "ready" || s.status === "served");
+          const anyStarted = inThisTicket.some(s => s.status === "preparing" || s.status === "ready" || s.status === "served");
+          if (allReady && t.status !== "ready") {
+            const [tu] = await db.update(kitchenTicketsTable).set({
+              status: "ready",
+              updatedAt: now,
+            }).where(eq(kitchenTicketsTable.id, t.id)).returning();
+            broadcastEvent(restaurantId, "ticket:status", { id: tu.id, status: tu.status, orderId: tu.orderId });
+          } else if (!allReady && anyStarted && t.status === "new") {
+            const [tu] = await db.update(kitchenTicketsTable).set({
+              status: "preparing",
+              startedAt: t.startedAt ?? now,
+              updatedAt: now,
+            }).where(eq(kitchenTicketsTable.id, t.id)).returning();
+            broadcastEvent(restaurantId, "ticket:status", { id: tu.id, status: tu.status, orderId: tu.orderId });
+          }
+        }
+      } catch (err) { void err; }
+    }
+
     // When the waiter serves the last ready item of a ticket's batch, the
     // ticket itself should move to "served" (and disappear from the KDS).
     if (status === "served") {
