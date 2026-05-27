@@ -20,7 +20,7 @@ const inventoryScopes = [
   "/restaurants/:restaurantId/food-cost",
   "/restaurants/:restaurantId/menu-engineering",
 ];
-router.use(inventoryScopes, requireRole("owner", "manager", "kitchen", "super_admin"), validateRestaurantAccess, requirePlanFeature("inventory_management"));
+router.use(inventoryScopes, requireRole("owner", "manager", "kitchen", "inventory_manager", "super_admin"), validateRestaurantAccess, requirePlanFeature("inventory_management"));
 
 router.get("/restaurants/:restaurantId/inventory", async (req, res) => {
   const { lowStock, search } = req.query;
@@ -114,7 +114,7 @@ async function triggerLowStockNotification(item: { id: number; name: string; cur
   }
 }
 
-router.post("/restaurants/:restaurantId/inventory/:id/adjust", requireRole("owner", "manager", "kitchen", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/inventory/:id/adjust", requireRole("owner", "manager", "kitchen", "inventory_manager", "super_admin"), async (req, res) => {
   const { type, quantity, notes, batchNumber, expiryDate } = req.body as {
     type: string; quantity: string | number; notes?: string;
     batchNumber?: string | null; expiryDate?: string | null;
@@ -255,7 +255,7 @@ router.get("/restaurants/:restaurantId/inventory/:id/transactions", async (req, 
 
 // Inventory valuation: current stock × cost per unit, broken down by category.
 // Used by Reports → Inventory Valuation. Owners and managers can read.
-router.get("/restaurants/:restaurantId/inventory/valuation", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/inventory/valuation", requireRole("owner", "manager", "inventory_manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const rows = await db.select().from(inventoryItemsTable)
     .where(and(eq(inventoryItemsTable.restaurantId, restaurantId), eq(inventoryItemsTable.isActive, true)));
@@ -311,7 +311,7 @@ router.get("/restaurants/:restaurantId/inventory/valuation", requireRole("owner"
 // Stock transfer between two outlets (restaurants) under the same tenant.
 // Decrements source item, increments matching destination item (matched by
 // name + unit, created if missing). Records audit transactions on both ends.
-router.post("/restaurants/:restaurantId/inventory/:id/transfer", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/inventory/:id/transfer", requireRole("owner", "manager", "inventory_manager", "super_admin"), async (req, res) => {
   const srcRestaurantId = Number(req.params.restaurantId);
   const srcItemId = Number(req.params.id);
   const { destRestaurantId, quantity, notes } = req.body as { destRestaurantId: number; quantity: string | number; notes?: string };
@@ -408,6 +408,48 @@ router.post("/restaurants/:restaurantId/inventory/:id/transfer", requireRole("ow
   }
 });
 
+// Pending / in-flight transfers FROM this outlet. Server-side stock transfers
+// commit immediately on both ends, but for the staff dashboard "pending" means
+// "left this outlet recently and not yet acknowledged on paper" — we surface
+// the count + recent transfer_out transactions in the last 24h so floor staff
+// can chase up missing deliveries between sister outlets.
+// Dedicated low-stock endpoint for the staff mobile alerts tab — returns
+// any item where currentStock <= minStockLevel (includes out-of-stock).
+router.get("/restaurants/:restaurantId/inventory/low-stock", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const items = await db.select().from(inventoryItemsTable)
+    .where(eq(inventoryItemsTable.restaurantId, restaurantId));
+  const result = items
+    .filter(i => Number(i.currentStock) <= Number(i.minStockLevel))
+    .map(i => ({ ...i, isLowStock: true }));
+  res.json(result);
+});
+
+router.get("/restaurants/:restaurantId/inventory/transfers/pending", async (req, res) => {
+  const restaurantId = Number(req.params.restaurantId);
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await db.select({
+      id: inventoryTransactionsTable.id,
+      itemId: inventoryTransactionsTable.itemId,
+      quantity: inventoryTransactionsTable.quantity,
+      notes: inventoryTransactionsTable.notes,
+      referenceId: inventoryTransactionsTable.referenceId,
+      createdAt: inventoryTransactionsTable.createdAt,
+      itemName: inventoryItemsTable.name,
+      unit: inventoryItemsTable.unit,
+    })
+    .from(inventoryTransactionsTable)
+    .leftJoin(inventoryItemsTable, eq(inventoryTransactionsTable.itemId, inventoryItemsTable.id))
+    .where(and(
+      eq(inventoryTransactionsTable.restaurantId, restaurantId),
+      eq(inventoryTransactionsTable.type, "transfer_out"),
+      gte(inventoryTransactionsTable.createdAt, since),
+    ))
+    .orderBy(desc(inventoryTransactionsTable.createdAt))
+    .limit(50);
+  res.json({ count: rows.length, transfers: rows });
+});
+
 router.get("/restaurants/:restaurantId/inventory/waste-log", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const wasteTxs = await db.select().from(inventoryTransactionsTable)
@@ -458,7 +500,7 @@ router.post("/restaurants/:restaurantId/auto-reorder/run", requireRole("owner", 
 
 // Replace all line items on a pending PO and recompute its total. Owners use this to
 // edit auto-drafted POs before sending (adjust qty/price, remove or add items).
-router.put("/restaurants/:restaurantId/purchase-orders/:id/items", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.put("/restaurants/:restaurantId/purchase-orders/:id/items", requireRole("owner", "manager", "inventory_manager", "super_admin"), async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const poId = Number(req.params.id);
   const { items } = req.body as { items?: Array<{ inventoryItemId?: number | null; name: string; unit: string; quantity: string | number; costPerUnit: string | number }> };
@@ -469,7 +511,10 @@ router.put("/restaurants/:restaurantId/purchase-orders/:id/items", requireRole("
       const [po] = await tx.select().from(purchaseOrdersTable)
         .where(and(eq(purchaseOrdersTable.id, poId), eq(purchaseOrdersTable.restaurantId, restaurantId)));
       if (!po) throw new Error("NOT_FOUND");
-      if (po.status !== "pending") throw new Error("NOT_EDITABLE");
+      // Allow line edits while the PO is still open (pending → being received).
+      // We freeze edits only once received or cancelled so closed records stay
+      // immutable for the books.
+      if (po.status === "received" || po.status === "cancelled") throw new Error("NOT_EDITABLE");
 
       await tx.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.purchaseOrderId, poId));
 
@@ -509,7 +554,7 @@ router.put("/restaurants/:restaurantId/purchase-orders/:id/items", requireRole("
   }
 });
 
-router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "manager", "inventory_manager", "super_admin"), async (req, res) => {
   const { supplierId, totalAmount, notes } = req.body;
   const [po] = await db.insert(purchaseOrdersTable).values({
     restaurantId: Number(req.params.restaurantId),
@@ -522,7 +567,7 @@ router.post("/restaurants/:restaurantId/purchase-orders", requireRole("owner", "
   res.status(201).json(po);
 });
 
-router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.patch("/restaurants/:restaurantId/purchase-orders/:id", requireRole("owner", "manager", "inventory_manager", "super_admin"), async (req, res) => {
   const { status, notes, totalAmount, paymentMethod, batches } = req.body as {
     status?: string; notes?: string; totalAmount?: string; paymentMethod?: string;
     batches?: Array<{ purchaseOrderItemId: number; batchNumber?: string | null; expiryDate?: string | null; quantity?: string | number }>;
