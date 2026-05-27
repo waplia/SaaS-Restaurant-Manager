@@ -90,6 +90,20 @@ export default function CashierShiftScreen() {
       // (the themed alert) stacked on top of another Modal (the bottom
       // sheet), so the error message would be invisible otherwise.
       setOpenSheet(false);
+      // 409 = a register is already open (someone else opened it, or our
+      // local cache was stale). Refresh so the screen flips to the
+      // open-session view instead of stranding the cashier on a button
+      // that keeps failing.
+      const status = (e as { status?: number }).status;
+      const isAlreadyOpen = status === 409 || /already open/i.test(e.message);
+      if (isAlreadyOpen) {
+        qc.invalidateQueries({ queryKey: ["cash-register-current"] });
+        qc.invalidateQueries({ queryKey: ["cash-register-session"] });
+        setTimeout(() => {
+          Alert.alert("Register already open", "Refreshed — showing the active session.");
+        }, 250);
+        return;
+      }
       setTimeout(() => {
         Alert.alert("Could not open shift", e.message);
       }, 250);

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl, wrapQueueable } from "./api";
+import { apiGet, apiPost, apiPatch, apiPut, apiDelete, getApiUrl, wrapQueueable, ApiError } from "./api";
 import type { StaffIncentiveRule, StaffIncentive, StaffIncentiveLeaderboardRow, Order } from "./types";
 import { useBranchContext } from "./branch";
 import { useAuth } from "./auth";
@@ -2726,6 +2726,14 @@ export function useOpenCashRegister() {
       apiPost(`/restaurants/${RESTAURANT_ID}/cash-register/sessions/open`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cash-register"] });
+    },
+    onError: (err) => {
+      // If the server says a register is already open, our cache is stale —
+      // refresh so the page snaps to the existing session view instead of
+      // leaving the cashier stuck on a non-functional "Open Register" button.
+      if (err instanceof ApiError && err.status === 409) {
+        qc.invalidateQueries({ queryKey: ["cash-register"] });
+      }
     },
   });
 }

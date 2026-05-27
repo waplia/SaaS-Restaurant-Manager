@@ -159,6 +159,19 @@ function OpenRegisterModal({ onClose }: { onClose: () => void }) {
       toast({ title: "Cash register opened", description: `Opening float: ${fmt(total)}` });
       onClose();
     } catch (e) {
+      // 409 means a register is already open (someone else, stale browser
+      // cache, etc). The mutation hook already invalidates the cache so
+      // the page snaps to the existing session — close the modal so the
+      // cashier isn't stranded staring at a non-functional form.
+      const status = (e as { status?: number }).status;
+      if (status === 409) {
+        toast({
+          title: "A register is already open",
+          description: "Refreshed — showing the active session.",
+        });
+        onClose();
+        return;
+      }
       toast({ title: "Failed to open register", description: (e as Error).message, variant: "destructive" });
     }
   };
