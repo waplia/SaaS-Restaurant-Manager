@@ -23,6 +23,7 @@ import { AppAlertProvider } from "@/components/ui/AppAlert";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
+import { useReactQueryRefreshBridge } from "@/hooks/useReactQueryRefreshBridge";
 
 // Set base URL at module level so all API calls use the correct domain.
 // Resolved from EXPO_PUBLIC_API_BASE_URL (preferred) with fallback to the
@@ -76,7 +77,20 @@ async function registerNotificationChannels(): Promise<void> {
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, retry: 2 },
+    queries: {
+      // Keep cached data for the gestural feel, but mark it stale almost
+      // immediately so any focus/navigation event triggers a refetch.
+      // Individual hooks can opt back into longer caching with their own
+      // staleTime when freshness genuinely doesn't matter (menu items,
+      // plan limits, etc).
+      staleTime: 0,
+      // RN doesn't fire window focus events natively; the refresh bridge
+      // (hooks/useReactQueryRefreshBridge.ts) forwards AppState and
+      // navigation focus into focusManager, so leave this default on.
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      retry: 2,
+    },
   },
 });
 
@@ -115,6 +129,12 @@ function routeForNotification(data: Record<string, unknown> | undefined): string
     default:
       return "/(owner)/notifications";
   }
+}
+
+function RefreshBridge() {
+  // Lives inside QueryClientProvider so useQueryClient resolves correctly.
+  useReactQueryRefreshBridge();
+  return null;
 }
 
 function RootLayoutNav() {
@@ -227,6 +247,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
+          <RefreshBridge />
           <AuthProvider>
             <CartProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
