@@ -3325,6 +3325,49 @@ router.patch(
     broadcastEvent(restaurantId, "order:item-status", {
       orderId, itemId, status, startedAt: updated.startedAt, readyAt: updated.readyAt,
     });
+
+    // Mirror back to the kitchen ticket so the KDS reflects floor actions.
+    // When the waiter serves the last ready item of a ticket's batch, the
+    // ticket itself should move to "served" (and disappear from the KDS).
+    if (status === "served") {
+      try {
+        const [menuRow] = updated.menuItemId != null
+          ? await db.select({ kitchenId: menuItemsTable.kitchenId })
+              .from(menuItemsTable).where(eq(menuItemsTable.id, updated.menuItemId))
+          : [];
+        const ticketScope = updated.kotBatchId != null
+          ? and(eq(kitchenTicketsTable.orderId, orderId), eq(kitchenTicketsTable.kotBatchId, updated.kotBatchId))
+          : (menuRow?.kitchenId != null
+              ? and(eq(kitchenTicketsTable.orderId, orderId), eq(kitchenTicketsTable.kitchenId, menuRow.kitchenId))
+              : eq(kitchenTicketsTable.orderId, orderId));
+        const tickets = await db.select().from(kitchenTicketsTable)
+          .where(and(ticketScope, notInArray(kitchenTicketsTable.status, ["served", "cancelled"])));
+        for (const t of tickets) {
+          // Items that belong to this ticket (batch when present, else
+          // order+kitchen). Skip if anything is still un-served.
+          const siblings = await db.select({
+            id: orderItemsTable.id,
+            status: orderItemsTable.status,
+            menuItemId: orderItemsTable.menuItemId,
+            kotBatchId: orderItemsTable.kotBatchId,
+          }).from(orderItemsTable).where(eq(orderItemsTable.orderId, orderId));
+          const inThisTicket = siblings.filter(s => {
+            if (s.status === "cancelled") return false;
+            if (t.kotBatchId != null) return s.kotBatchId === t.kotBatchId;
+            return true; // legacy ticket: covers the whole order at this kitchen
+          });
+          const allServed = inThisTicket.length > 0 && inThisTicket.every(s => s.status === "served");
+          if (!allServed) continue;
+          const [tu] = await db.update(kitchenTicketsTable).set({
+            status: "served",
+            completedAt: t.completedAt ?? now,
+            updatedAt: now,
+          }).where(eq(kitchenTicketsTable.id, t.id)).returning();
+          broadcastEvent(restaurantId, "ticket:status", { id: tu.id, status: tu.status, orderId: tu.orderId });
+        }
+      } catch (err) { void err; }
+    }
+
     res.json(updated);
   },
 );
