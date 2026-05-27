@@ -11,6 +11,7 @@
  */
 import { useMemo, useRef, useState } from "react";
 import type { OrderDetailView, SplitLeg } from "../../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../../shared/orderNumber";
 import { Banner, Button, Input, Label, colors } from "../../ui/components";
 import { Modal } from "./Modals";
 import { fmtINR } from "./types";
@@ -81,7 +82,7 @@ export function SplitBillModal({ order, onClose, onPaid }: {
   }
 
   return (
-    <Modal title={`Split bill · Order #${order.orderNumber}`} onClose={onClose} width={620}>
+    <Modal title={`Split bill · Order #${shortOrderNumber(order)}`} onClose={onClose} width={620}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
         <span style={{ color: colors.textDim, fontSize: 13 }}>Total to split</span>
         <span style={{ fontSize: 22, fontWeight: 800, color: colors.brand, fontVariantNumeric: "tabular-nums" }}>

@@ -14,6 +14,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OrderDetailView, PayMethod, Terminal } from "../../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../../shared/orderNumber";
 import { Banner, Button, Input, Label, Spinner, colors } from "../../ui/components";
 import { Modal } from "./Modals";
 import { CalculatorModal } from "./CalculatorModal";
@@ -156,7 +157,7 @@ export function PaymentModal({ order, onClose, onPaid, online }: {
   }
 
   return (
-    <Modal title={`Pay · Order #${order.orderNumber}`} onClose={onClose} width={520}>
+    <Modal title={`Pay · Order #${shortOrderNumber(order)}`} onClose={onClose} width={520}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 }}>
         <span style={{ color: colors.textDim, fontSize: 13 }}>Amount due</span>
         <span style={{ fontSize: 28, fontWeight: 800, color: colors.brand, fontVariantNumeric: "tabular-nums" }}>

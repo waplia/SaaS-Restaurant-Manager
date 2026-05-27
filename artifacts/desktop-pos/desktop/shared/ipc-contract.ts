@@ -267,7 +267,15 @@ export interface CreateOrderRequest {
 export interface OrderHeader {
   id: number;
   restaurantId: number;
+  /** Canonical long id from the server, e.g. "KL-R1-MGROAD-20260527-DN-000020".
+   *  Never render this directly to operators — use `shortOrderNumber()` from
+   *  `desktop/shared/orderNumber.ts`, which prefers `orderDisplayNumber`. */
   orderNumber: string;
+  /** Short operator-friendly id minted by the server, e.g. "DN-20".
+   *  Optional because (a) older payloads cached in SQLite predate the column
+   *  and (b) offline-created orders synthesize their own "L-XXXXXX" id in
+   *  `orderNumber` until sync remap fills this in. */
+  orderDisplayNumber?: string | null;
   status: string;
   orderType: string;
   tableId: number | null;

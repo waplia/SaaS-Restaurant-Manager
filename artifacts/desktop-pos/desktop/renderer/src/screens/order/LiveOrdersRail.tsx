@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { OrderHeader } from "../../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../../shared/orderNumber";
 import { colors } from "../../ui/components";
 import { fmtINR } from "./types";
 
@@ -102,7 +103,7 @@ export function LiveOrdersRail({ activeOrderId, onPick, refreshToken, open, onTo
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontWeight: 700, fontSize: 13 }}>#{o.orderNumber}</span>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>#{shortOrderNumber(o)}</span>
                 <span style={{ fontSize: 11, color: isSel ? "#fed7aa" : colors.textDim }}>
                   {o.status}
                 </span>

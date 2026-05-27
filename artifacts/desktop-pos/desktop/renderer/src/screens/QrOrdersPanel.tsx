@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSounds } from "../hooks/useSounds";
 import type { OrderHeader } from "../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../shared/orderNumber";
 import { Banner, Button, Spinner, colors } from "../ui/components";
 import { fmtINR } from "./order/types";
 
@@ -63,7 +64,7 @@ export function QrOrdersPanel({ onOpenOrder }: Props) {
       const detail = await window.khanalagao.orders.detail({ id: o.id });
       if (detail.items.length === 0) { flash("Order has no items to KOT."); return; }
       const r = await window.khanalagao.printers.printOrderKots({
-        orderNumber: detail.orderNumber,
+        orderNumber: shortOrderNumber(detail),
         tableLabel: detail.tableLabel ?? null,
         orderType: detail.orderType,
         createdAt: detail.createdAt,
@@ -76,20 +77,20 @@ export function QrOrdersPanel({ onOpenOrder }: Props) {
           notes: i.notes ?? null,
         })),
       });
-      flash(`Accepted #${o.orderNumber} · ${r?.printed?.length ?? 0} ticket(s)`);
+      flash(`Accepted #${shortOrderNumber(o)} · ${r?.printed?.length ?? 0} ticket(s)`);
       void refresh();
     } catch (e) { flash(`Accept failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
   }
 
   async function reject(o: OrderHeader) {
-    if (!window.confirm(`Cancel order #${o.orderNumber}? This cannot be undone.`)) return;
+    if (!window.confirm(`Cancel order #${shortOrderNumber(o)}? This cannot be undone.`)) return;
     setBusy(`reject_${o.id}`);
     try {
       await window.khanalagao.orders.update({
         id: o.id, patch: { status: "cancelled" },
       });
-      flash(`Cancelled #${o.orderNumber}`);
+      flash(`Cancelled #${shortOrderNumber(o)}`);
       void refresh();
     } catch (e) { flash(`Cancel failed: ${(e as Error).message}`); }
     finally { setBusy(null); }
@@ -143,7 +144,7 @@ export function QrOrdersPanel({ onOpenOrder }: Props) {
             }}>
               <div>
                 <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ fontWeight: 800, fontSize: 16 }}>#{o.orderNumber}</span>
+                  <span style={{ fontWeight: 800, fontSize: 16 }}>#{shortOrderNumber(o)}</span>
                   <span style={{
                     fontSize: 10, fontWeight: 700, textTransform: "uppercase",
                     padding: "2px 6px", borderRadius: 999,

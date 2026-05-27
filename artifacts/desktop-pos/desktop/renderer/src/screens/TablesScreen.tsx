@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FloorTable, OrderHeader } from "../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../shared/orderNumber";
 import { Banner, Button, Spinner, colors } from "../ui/components";
 import { fmtINR } from "./order/types";
 
@@ -184,7 +185,7 @@ export function TablesScreen({ onOpenTable }: Props) {
                 <div style={{ marginTop: 4 }}>
                   <div style={{ fontSize: 12, color: colors.textDim }}>Order</div>
                   <div style={{ fontWeight: 700, fontSize: 14, color: colors.brand }}>
-                    #{live.orderNumber} · {fmtINR(Number(live.totalAmount))}
+                    #{shortOrderNumber(live)} · {fmtINR(Number(live.totalAmount))}
                   </div>
                   <div style={{ fontSize: 11, color: colors.textMuted }}>{live.status}</div>
                 </div>
@@ -207,7 +208,7 @@ export function TablesScreen({ onOpenTable }: Props) {
                   onClick={() => {
                     if (!live) { showInfo("No order to split."); return; }
                     onOpenTable(t, live.id);
-                    showInfo(`Opened #${live.orderNumber} — use Split bill from the cart.`);
+                    showInfo(`Opened #${shortOrderNumber(live)} — use Split bill from the cart.`);
                   }}
                   style={smallBtn}
                 >⊥</button>
@@ -261,7 +262,7 @@ function TableMoveOverlay({ dialog, tables, ordersByTable, busy, onPick, onClose
           <div>
             <h3 style={{ margin: 0, fontSize: 18 }}>Transfer order</h3>
             <div style={{ fontSize: 12, color: colors.textDim, marginTop: 2 }}>
-              Order #{dialog.sourceOrder.orderNumber} on T{dialog.sourceTable.tableNumber}
+              Order #{shortOrderNumber(dialog.sourceOrder)} on T{dialog.sourceTable.tableNumber}
               {" · "}
               {fmtINR(Number(dialog.sourceOrder.totalAmount))}
             </div>
@@ -303,7 +304,7 @@ function TableMoveOverlay({ dialog, tables, ordersByTable, busy, onPick, onClose
                 </div>
                 {occupied && (
                   <div style={{ fontSize: 10, color: colors.textMuted, marginTop: 2 }}>
-                    #{live.orderNumber} · {fmtINR(Number(live.totalAmount))}
+                    #{shortOrderNumber(live)} · {fmtINR(Number(live.totalAmount))}
                   </div>
                 )}
               </button>

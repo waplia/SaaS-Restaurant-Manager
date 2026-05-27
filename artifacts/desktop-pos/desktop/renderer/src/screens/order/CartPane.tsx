@@ -1,5 +1,6 @@
 import type { CartItem, Totals } from "./types";
 import type { OrderDetailView } from "../../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../../shared/orderNumber";
 import { Button, colors } from "../../ui/components";
 import { fmtINR } from "./types";
 
@@ -78,7 +79,7 @@ export function CartPane(props: Props) {
       <div style={{ padding: "14px 16px", borderBottom: `1px solid ${colors.border}` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: colors.textDim }}>
-            {placedOrder ? `Order #${placedOrder.orderNumber}` : "New Order"}
+            {placedOrder ? `Order #${shortOrderNumber(placedOrder)}` : "New Order"}
           </span>
           {placedOrder && (
             <span style={{

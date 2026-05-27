@@ -27,6 +27,7 @@ import type {
   CartItemInput, CustomerSummary, DiscountsConfig, FloorTable, MenuCategory,
   MenuItem, OrderDetailView, OrderType, RestaurantInfo,
 } from "../../../shared/ipc-contract";
+import { shortOrderNumber } from "../../../shared/orderNumber";
 import { Banner, Button, Spinner, colors } from "../ui/components";
 import { LiveOrdersRail } from "./order/LiveOrdersRail";
 import { MenuPane } from "./order/MenuPane";
@@ -386,7 +387,7 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
     if (!placedOrder) return;
     try {
       await window.khanalagao.printers.printOrderKots({
-        orderNumber: placedOrder.orderNumber,
+        orderNumber: shortOrderNumber(placedOrder),
         items: placedOrder.items.map(it => ({
           name: it.menuItemName,
           quantity: it.quantity,

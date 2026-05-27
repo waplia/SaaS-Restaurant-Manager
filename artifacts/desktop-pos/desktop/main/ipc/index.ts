@@ -26,6 +26,7 @@ import { ApiClient, ApiError, type ApiRestaurantDetail } from "../api/client";
 import { sessionStore } from "../session-store";
 import type { PrinterEngine } from "../printers";
 import * as Offline from "./offline";
+import { shortOrderNumber } from "../../shared/orderNumber";
 import type { Connectivity } from "../sync/connectivity";
 import type { SyncEngine } from "../sync/engine";
 import { hydrateAll } from "../sync/hydrate";
@@ -666,7 +667,10 @@ function num(v: number | string | null | undefined): number {
 
 function buildKotPayload(order: OrderDetailView): OrderKotPayload {
   return {
-    orderNumber: order.orderNumber,
+    // Prefer the short display id ("DN-20") over the canonical long id
+    // ("KL-R1-MGROAD-20260527-DN-000020") so the kitchen ticket header
+    // matches what the cashier sees on screen.
+    orderNumber: shortOrderNumber(order),
     orderType: order.orderType ?? null,
     tableLabel: order.tableLabel ?? null,
     createdAt: order.createdAt ?? null,
@@ -691,7 +695,9 @@ function buildBillPayload(
     orderId: order.id,
     restaurantId: extra.restaurantId,
     channel: extra.channel ?? "desktop_pos",
-    orderNumber: order.orderNumber,
+    // Bill receipts print the short id ("DN-20") — never the long
+    // canonical id. See `shortOrderNumber` for the precedence rules.
+    orderNumber: shortOrderNumber(order),
     orderType: order.orderType ?? null,
     tableLabel: order.tableLabel ?? null,
     createdAt: order.createdAt ?? null,
