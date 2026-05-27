@@ -159,6 +159,11 @@ export const kitchenTicketsTable = pgTable("kitchen_tickets", {
   brandId: integer("brand_id"),
   channelKey: text("channel_key"),
   packagingNotes: text("packaging_notes"),
+  // Task #651 — links each ticket back to the KOT round that produced it,
+  // so status mirroring onto order_items can be scoped to that round only
+  // (preventing later-round items at the same kitchen from being promoted
+  // prematurely when an earlier ticket is marked ready/served).
+  kotBatchId: integer("kot_batch_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

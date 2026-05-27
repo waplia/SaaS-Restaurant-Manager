@@ -3071,8 +3071,22 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
 
   // Mirror timing onto order_items for this ticket's kitchen so per-item analytics work.
   if (status === "preparing" || status === "ready" || status === "served") {
-    const allItems = await db.select({ id: orderItemsTable.id, menuItemId: orderItemsTable.menuItemId })
-      .from(orderItemsTable).where(eq(orderItemsTable.orderId, updated.orderId));
+    // Prefer scoping by KOT batch (Task #651) so a ready/served transition
+    // on round-1 doesn't promote round-2 items at the same kitchen. Fall
+    // back to the legacy orderId+kitchenId scope only when the ticket was
+    // created before kotBatchId was tracked.
+    let allItems: Array<{ id: number; menuItemId: number | null }> = [];
+    if (updated.kotBatchId != null) {
+      allItems = await db.select({ id: orderItemsTable.id, menuItemId: orderItemsTable.menuItemId })
+        .from(orderItemsTable)
+        .where(and(
+          eq(orderItemsTable.orderId, updated.orderId),
+          eq(orderItemsTable.kotBatchId, updated.kotBatchId),
+        ));
+    } else {
+      allItems = await db.select({ id: orderItemsTable.id, menuItemId: orderItemsTable.menuItemId })
+        .from(orderItemsTable).where(eq(orderItemsTable.orderId, updated.orderId));
+    }
     const ids = allItems.map(i => i.menuItemId).filter((x): x is number => x != null);
     const menuRows = ids.length > 0
       ? await db.select({ id: menuItemsTable.id, kitchenId: menuItemsTable.kitchenId })
@@ -3083,10 +3097,21 @@ router.patch("/restaurants/:restaurantId/kitchen/tickets/:id/status", requirePla
       .filter(i => updated.kitchenId == null || (i.menuItemId != null && kitchenById.get(i.menuItemId) === updated.kitchenId))
       .map(i => i.id);
     if (matchIds.length > 0) {
-      const itemUpdates: Record<string, unknown> = {};
+      const itemUpdates: Record<string, unknown> = { status, updatedAt: now };
       if (status === "preparing") itemUpdates.startedAt = now;
       if (status === "ready" || status === "served") itemUpdates.readyAt = now;
-      await db.update(orderItemsTable).set(itemUpdates).where(inArray(orderItemsTable.id, matchIds));
+      // Forward-only: never demote an item that's already past this stage
+      // (e.g. don't flip a served item back to ready).
+      const behind =
+        status === "preparing" ? ["pending"]
+        : status === "ready" ? ["pending", "preparing"]
+        : ["pending", "preparing", "ready"]; // served
+      await db.update(orderItemsTable)
+        .set(itemUpdates)
+        .where(and(
+          inArray(orderItemsTable.id, matchIds),
+          inArray(orderItemsTable.status, behind),
+        ));
     }
   }
 

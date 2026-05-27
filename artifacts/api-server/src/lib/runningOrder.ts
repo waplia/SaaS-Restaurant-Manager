@@ -315,6 +315,7 @@ export async function createKotBatchForItems(args: {
         orderId,
         restaurantId,
         kitchenId: kid,
+        kotBatchId: batch.id,
         isPriority: isPriority ?? false,
         expectedPrepMinutes,
         expectedReadyAt,
