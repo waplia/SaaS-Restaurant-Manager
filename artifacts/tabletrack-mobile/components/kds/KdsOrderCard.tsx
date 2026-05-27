@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import type { KdsTicket, KdsItem } from "@/hooks/useKdsTickets";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 interface Props {
   ticket: KdsTicket;
@@ -136,7 +137,7 @@ function KdsOrderCardImpl({ ticket, itemChecks, onCycleItem, onPrimaryAction, on
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.titleRow}>
             <Text style={[styles.orderNum, { color: ticket.isDelayed ? "#7f1d1d" : colors.foreground }]}>
-              Order #{ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}
+              Order #{formatOrderNumber(ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id)}
             </Text>
             <View style={[styles.pill, { backgroundColor: stMeta.color + "22", borderColor: stMeta.color, borderWidth: 1 }]}>
               <Text style={[styles.pillText, { color: stMeta.color }]}>KOT #{ticket.id}</Text>

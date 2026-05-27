@@ -15,6 +15,7 @@ import type { OrderDetail } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAlert, useAlertFn } from "@/components/ui/AppAlert";
 import { useAuth } from "@/context/AuthContext";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 const STATUS_FLOW: Record<string, string> = {
   pending: "in_progress",
@@ -215,7 +216,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
             <Ionicons name="close" size={24} color={colors.foreground} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
-            {order ? `#${order.orderNumber}` : "Order"}
+            {order ? `#${formatOrderNumber(order.orderNumber)}` : "Order"}
           </Text>
           {isPriority && <Ionicons name="flag" size={16} color="#f97316" style={{ marginLeft: 6 }} />}
         </View>

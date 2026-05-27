@@ -14,7 +14,7 @@ import { TrendingUp, TrendingDown, ShoppingBag, Table2, ChefHat, DollarSign, Ale
 import { useWasteDashboardTile } from "@/lib/hooks";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatOrderNumber } from "@/lib/utils";
 import { format } from "date-fns";
 import type { DashboardSummary, KitchenTicket, AuditLogEntry, PopularItem, RevenueTrendItem } from "@/lib/types";
 
@@ -353,7 +353,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-2">
                     {t.isPriority && <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />}
                     <div>
-                      <p className="text-sm font-medium text-foreground">{t.orderDisplayNumber ?? t.orderNumber}</p>
+                      <p className="text-sm font-medium text-foreground">{formatOrderNumber(t.orderDisplayNumber ?? t.orderNumber)}</p>
                       <p className="text-xs text-muted-foreground">
                         {t.tableNumber ? `Table ${t.tableNumber}` : t.orderType} · {t.items?.length ?? 0} items
                       </p>

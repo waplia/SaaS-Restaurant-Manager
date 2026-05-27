@@ -18,6 +18,7 @@ import { useKdsRealtime, type ConnectionState } from "@/hooks/useKdsRealtime";
 import { useKdsSettings } from "@/hooks/useKdsSettings";
 import { useKdsSounds, type AlertSoundKey } from "@/hooks/useKdsSounds";
 import { ChefKotCard, CHEF_ITEM_CYCLE, type ChefItemStatus } from "./ChefKotCard";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 type ChefTabKey = "new" | "preparing" | "ready" | "delayed" | "completed";
 const TABS: ReadonlyArray<{
@@ -47,7 +48,20 @@ const SERVER_TO_CLIENT_STATUS: Record<string, ChefItemStatus> = {
 };
 
 const EMPTY_CHECKS: Record<number, ChefItemStatus> = {};
-const keyExtractor = (t: KdsTicket) => String(t.id);
+
+// Bug #2 fix — the chef screen used to render one independent card per
+// kitchen ticket, so when a single order produced multiple KOTs (e.g. one
+// per station, or a round-2 add-on) the chef had to mentally re-stitch them
+// together by reading the small "Order #N" line on each card. Group tickets
+// by orderId and render a colour-coded order header above each cluster so
+// every KOT belonging to the same guest sits visibly boxed under one
+// "Order #N · Table X" banner — matching the waiter Ready queue layout.
+type ChefRow =
+  | { type: "order-header"; orderId: number; orderLabel: string; tableLabel: string | null; ticketCount: number; itemCount: number }
+  | { type: "ticket"; ticket: KdsTicket };
+
+const keyExtractor = (row: ChefRow) =>
+  row.type === "order-header" ? `order-${row.orderId}` : `ticket-${row.ticket.id}`;
 
 const REPRINT_ROLES = new Set(["owner", "manager", "super_admin", "chef"]);
 
@@ -264,7 +278,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
     try {
       await updateStatus.mutateAsync({ restaurantId, id: ticket.id, data: { status: nextStatus } });
       qc.invalidateQueries({ queryKey });
-      const label = `KOT #${ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}`;
+      const label = `KOT #${formatOrderNumber(ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id)}`;
       showToast(
         "success",
         nextStatus === "preparing" ? `${label} accepted` :
@@ -303,7 +317,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
         body: JSON.stringify({ reason }),
         headers: { "content-type": "application/json" },
       });
-      showToast("info", `Delay reason logged for KOT #${target.orderDisplayNumber ?? target.orderNumber ?? target.id}`);
+      showToast("info", `Delay reason logged for KOT #${formatOrderNumber(target.orderDisplayNumber ?? target.orderNumber ?? target.id)}`);
     } catch (err) {
       showToast("error", (err as Error).message || "Couldn't log delay reason");
     }
@@ -327,7 +341,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
           paperSize: ticket.kitchen?.paperSize ?? "80mm",
           kotNumber: String(ticket.id),
           orderNumber: ticket.orderDisplayNumber
-            ? String(ticket.orderDisplayNumber)
+            ? formatOrderNumber(ticket.orderDisplayNumber)
             : (ticket.orderNumber ? String(ticket.orderNumber) : undefined),
           tableLabel: ticket.tableNumber ?? undefined,
           customerName: ticket.customerName ?? undefined,
@@ -375,28 +389,93 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
     return map;
   }, [filteredForTab, computeItemStatus]);
 
-  const renderItem = useCallback(({ item }: { item: KdsTicket }) => {
-    const checks = checksByTicket.get(item.id) ?? EMPTY_CHECKS;
+  // Build a flat row list that interleaves order-header banners with their
+  // ticket cards. Preserves the existing per-tab sort (filteredForTab) by
+  // grouping in first-seen order rather than re-sorting.
+  const groupedRows = useMemo<ChefRow[]>(() => {
+    const byOrder = new Map<number, KdsTicket[]>();
+    const orderSequence: number[] = [];
+    for (const t of filteredForTab) {
+      const oid = t.orderId ?? t.id;
+      if (!byOrder.has(oid)) {
+        byOrder.set(oid, []);
+        orderSequence.push(oid);
+      }
+      byOrder.get(oid)!.push(t);
+    }
+    const rows: ChefRow[] = [];
+    for (const oid of orderSequence) {
+      const tickets = byOrder.get(oid)!;
+      const first = tickets[0];
+      const itemCount = tickets.reduce((n, t) => n + (t.items?.length ?? 0), 0);
+      const orderLabel = formatOrderNumber(
+        first.orderDisplayNumber ?? first.orderNumber ?? oid,
+      );
+      rows.push({
+        type: "order-header",
+        orderId: oid,
+        orderLabel,
+        tableLabel: first.tableNumber ?? null,
+        ticketCount: tickets.length,
+        itemCount,
+      });
+      for (const t of tickets) rows.push({ type: "ticket", ticket: t });
+    }
+    return rows;
+  }, [filteredForTab]);
+
+  const renderItem = useCallback(({ item }: { item: ChefRow }) => {
+    if (item.type === "order-header") {
+      return (
+        <View
+          style={[
+            styles.orderHeader,
+            { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+          ]}
+        >
+          <View style={[styles.orderHeaderAccent, { backgroundColor: colors.primary }]} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.orderHeaderTitle, { color: colors.foreground }]}>
+              Order #{item.orderLabel}
+              {item.tableLabel ? (
+                <Text style={[styles.orderHeaderTable, { color: colors.mutedForeground }]}>
+                  {"  ·  Table "}{item.tableLabel}
+                </Text>
+              ) : null}
+            </Text>
+            <Text style={[styles.orderHeaderMeta, { color: colors.mutedForeground }]}>
+              {item.ticketCount} {item.ticketCount === 1 ? "KOT" : "KOTs"}
+              {" · "}
+              {item.itemCount} {item.itemCount === 1 ? "item" : "items"}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    const ticket = item.ticket;
+    const checks = checksByTicket.get(ticket.id) ?? EMPTY_CHECKS;
     const waiterName =
-      (item as { waiterName?: string | null }).waiterName ??
-      (item as { createdByName?: string | null }).createdByName ??
+      (ticket as { waiterName?: string | null }).waiterName ??
+      (ticket as { createdByName?: string | null }).createdByName ??
       null;
     return (
-      <ChefKotCard
-        ticket={item}
-        itemChecks={checks}
-        onCycleItem={(id) => cycleItem(item, id)}
-        onAccept={onAccept}
-        onStartCooking={onStartCooking}
-        onMarkReady={onMarkReady}
-        onDelayReason={(t) => setDelayTarget(t)}
-        onReprint={reprintKot}
-        canReprint={canReprint}
-        waiterName={waiterName}
-        isPending={!!pendingTicketIds[item.id]}
-      />
+      <View style={styles.ticketWrap}>
+        <ChefKotCard
+          ticket={ticket}
+          itemChecks={checks}
+          onCycleItem={(id) => cycleItem(ticket, id)}
+          onAccept={onAccept}
+          onStartCooking={onStartCooking}
+          onMarkReady={onMarkReady}
+          onDelayReason={(t) => setDelayTarget(t)}
+          onReprint={reprintKot}
+          canReprint={canReprint}
+          waiterName={waiterName}
+          isPending={!!pendingTicketIds[ticket.id]}
+        />
+      </View>
     );
-  }, [checksByTicket, cycleItem, onAccept, onStartCooking, onMarkReady, reprintKot, canReprint, pendingTicketIds]);
+  }, [checksByTicket, cycleItem, onAccept, onStartCooking, onMarkReady, reprintKot, canReprint, pendingTicketIds, colors]);
 
   const activeStations = (kitchensQ.data ?? []).filter((k) => k.isActive !== false);
   const headerTop = isWeb ? 16 : insets.top + 4;
@@ -500,7 +579,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
         </View>
       ) : (
         <FlatList
-          data={filteredForTab}
+          data={groupedRows}
           keyExtractor={keyExtractor}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 96 }]}
           renderItem={renderItem}
@@ -543,7 +622,7 @@ export function ChefBoard({ initialTab = "new", title = "KOT Board" }: ChefBoard
 
       <DelayReasonSheet
         visible={!!delayTarget}
-        kotLabel={delayTarget ? `KOT #${delayTarget.orderDisplayNumber ?? delayTarget.orderNumber ?? delayTarget.id}` : ""}
+        kotLabel={delayTarget ? `KOT #${formatOrderNumber(delayTarget.orderDisplayNumber ?? delayTarget.orderNumber ?? delayTarget.id)}` : ""}
         onClose={() => setDelayTarget(null)}
         onSubmit={submitDelayReason}
       />
@@ -697,6 +776,18 @@ const styles = StyleSheet.create({
   stationChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1 },
   stationChipText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   list: { padding: 12 },
+  orderHeader: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderRadius: 12, borderWidth: 1,
+    marginTop: 12, marginBottom: 6,
+    overflow: "hidden",
+  },
+  orderHeaderAccent: { width: 4, alignSelf: "stretch", borderRadius: 2 },
+  orderHeaderTitle: { fontSize: 16, fontFamily: "Inter_700Bold", letterSpacing: -0.2 },
+  orderHeaderTable: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  orderHeaderMeta: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  ticketWrap: { marginLeft: 8 },
   centerWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 12 },
   emptyTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
   retryBtn: { marginTop: 8, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 },

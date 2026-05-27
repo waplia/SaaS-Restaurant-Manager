@@ -16,6 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import { customFetch } from "@workspace/api-client-react";
 import { withTimeout } from "@/lib/withTimeout";
+import { formatOrderNumber } from "@/lib/orderNumber";
 import type { MenuCategory, MenuItem, Order } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MenuItemCard } from "@/components/MenuItemCard";
@@ -510,7 +511,7 @@ export default function WaiterOrderScreen() {
         >
           <Ionicons name="checkmark-circle" size={16} color={colors.primary} />
           <Text style={[styles.activeOrderText, { color: colors.primary }]}>
-            Active order #{(activeOrder as unknown as { orderDisplayNumber?: string | null; orderNumber?: string }).orderDisplayNumber ?? (activeOrder as unknown as { orderNumber?: string }).orderNumber ?? activeOrder.id}
+            Active order #{formatOrderNumber((activeOrder as unknown as { orderDisplayNumber?: string | null; orderNumber?: string }).orderDisplayNumber ?? (activeOrder as unknown as { orderNumber?: string }).orderNumber ?? activeOrder.id)}
           </Text>
           <View style={styles.billChip}>
             <Ionicons name="receipt-outline" size={13} color={colors.primary} />

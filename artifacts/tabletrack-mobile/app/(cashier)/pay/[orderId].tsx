@@ -19,6 +19,7 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
 import { usePermission } from "@/hooks/usePermission";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 type ApiMethod = "cash" | "card" | "upi";
 type SplitLeg = "cash" | "card" | "upi";
@@ -79,7 +80,7 @@ export default function CashierPayScreen() {
   const order = (data as OrderDetail | null) ?? null;
   const orderTotal = Number(order?.totalAmount ?? 0);
   const isPaid = (order as { paymentStatus?: string } | null)?.paymentStatus === "paid";
-  const orderNumber = (order as { orderNumber?: string } | null)?.orderNumber ?? String(id);
+  const orderNumber = formatOrderNumber((order as { orderNumber?: string } | null)?.orderNumber ?? String(id));
 
   const payMut = usePayOrder();
   const splitMut = useSplitOrder();

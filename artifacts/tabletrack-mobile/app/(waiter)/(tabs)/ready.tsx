@@ -17,6 +17,7 @@ import {
 } from "@/components/ui";
 import { Alert } from "@/components/ui/AppAlert";
 import { useRunningOrdersSummary, useSetItemKitchenStatus } from "@/hooks/useRunningOrder";
+import { formatOrderNumber } from "@/lib/orderNumber";
 import { usePermission } from "@/hooks/usePermission";
 import { useWaiterRealtime } from "@/hooks/useWaiterRealtime";
 
@@ -104,7 +105,7 @@ export default function ReadyQueueScreen() {
         tableId,
         tableLabel: tableLabelById.get(tableId) ?? `T${tableId}`,
         orderId: s.orderId,
-        orderNumber: s.orderDisplayNumber ?? s.orderNumber,
+        orderNumber: formatOrderNumber(s.orderDisplayNumber ?? s.orderNumber),
         items,
         oldestSinceMin: items[0]?.readySinceMin ?? 0,
       });

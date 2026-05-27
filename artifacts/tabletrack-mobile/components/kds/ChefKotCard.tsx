@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useChefColors } from "@/hooks/useChefColors";
 import type { KdsTicket, KdsItem } from "@/hooks/useKdsTickets";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 export type ChefItemStatus = "pending" | "preparing" | "ready" | "oos";
 
@@ -126,7 +127,7 @@ function ChefKotCardImpl({
         <View style={{ flex: 1, gap: 6 }}>
           <View style={styles.titleRow}>
             <Text style={[styles.kotNum, { color: ticket.isDelayed ? "#fecaca" : colors.foreground }]}>
-              Order #{ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}
+              Order #{formatOrderNumber(ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id)}
             </Text>
             <View style={[styles.pill, { backgroundColor: stMeta.color + "22", borderColor: stMeta.color }]}>
               <Text style={[styles.pillText, { color: stMeta.color }]}>KOT #{ticket.id}</Text>

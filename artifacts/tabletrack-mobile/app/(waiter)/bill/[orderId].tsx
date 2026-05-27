@@ -13,6 +13,7 @@ import {
 import type { OrderDetail } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 const PAYMENT_METHODS = [
   { key: "cash", label: "Cash", icon: "cash-outline" as const },
@@ -45,7 +46,7 @@ export default function BillScreen() {
   const order = data as OrderDetail | null;
 
   React.useEffect(() => {
-    navigation.setOptions({ title: `Bill — Order #${order?.orderInternalNumber ?? order?.orderNumber ?? id}` });
+    navigation.setOptions({ title: `Bill — Order #${formatOrderNumber(order?.orderInternalNumber ?? order?.orderNumber ?? id)}` });
   }, [order, id]);
 
   const handleConfirmPayment = () => {
@@ -72,7 +73,7 @@ export default function BillScreen() {
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               qc.invalidateQueries({ queryKey: getGetOrderQueryKey(restaurantId, id) });
-              Alert.alert("Payment Confirmed!", `Order #${order.orderInternalNumber ?? order.orderNumber} marked as paid.`, [
+              Alert.alert("Payment Confirmed!", `Order #${formatOrderNumber(order.orderInternalNumber ?? order.orderNumber)} marked as paid.`, [
                 { text: "OK", onPress: () => router.back() },
               ]);
             } catch {
@@ -91,7 +92,7 @@ export default function BillScreen() {
     type BillItem = { id: number; menuItemName: string; quantity: number; totalPrice?: string; unitPrice?: string };
     const items = (order.items ?? []) as BillItem[];
     const lines = items.map(it => `• ${it.menuItemName} x${it.quantity}  ₹${Number(it.totalPrice ?? it.unitPrice).toLocaleString()}`).join("\n");
-    const orderNumber = order.orderInternalNumber ?? order.orderNumber ?? id;
+    const orderNumber = formatOrderNumber(order.orderInternalNumber ?? order.orderNumber ?? id);
     const subtotal = Number(order.subtotal ?? order.totalAmount);
     const tax = Number((order as { taxAmount?: string }).taxAmount ?? 0);
     const discount = Number((order as { discountAmount?: string }).discountAmount ?? 0);
@@ -231,7 +232,7 @@ export default function BillScreen() {
           <View style={styles.billHeader}>
             <Ionicons name="receipt-outline" size={20} color={colors.primary} />
             <Text style={[styles.billTitle, { color: colors.foreground }]}>
-              Order #{order.orderInternalNumber ?? order.orderNumber ?? id}
+              Order #{formatOrderNumber(order.orderInternalNumber ?? order.orderNumber ?? id)}
             </Text>
             {isPaid && (
               <View style={[styles.paidBadge, { backgroundColor: "#22c55e20" }]}>

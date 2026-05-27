@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, fmtMoney, fmtDate } from "@/lib/api";
+import { formatOrderNumber } from "@/lib/utils";
 import { Header } from "@/components/Layout";
 import { Receipt } from "lucide-react";
 
@@ -40,11 +41,11 @@ export default function Visits() {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{v.restaurantName}</p>
                   <p className="text-xs text-zinc-500">
-                    <span className="font-semibold text-zinc-700">{v.orderDisplayNumber ?? v.orderNumber}</span>
+                    <span className="font-semibold text-zinc-700">{formatOrderNumber(v.orderDisplayNumber ?? v.orderNumber)}</span>
                     {" · "}{fmtDate(v.createdAt)}
                   </p>
                   {v.orderInternalNumber && v.orderInternalNumber !== v.orderNumber && (
-                    <p className="text-[10px] text-zinc-400 truncate">{v.orderInternalNumber}</p>
+                    <p className="text-[10px] text-zinc-400 truncate">{formatOrderNumber(v.orderInternalNumber)}</p>
                   )}
                 </div>
                 <div className="text-right">

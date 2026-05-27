@@ -18,6 +18,7 @@ import {
   type KdsTabKey, type KdsFilterKey, type KdsTicket, type KdsKitchen,
 } from "@/hooks/useKdsTickets";
 import { useKdsRealtime, type ConnectionState } from "@/hooks/useKdsRealtime";
+import { formatOrderNumber } from "@/lib/orderNumber";
 import { useKdsSettings } from "@/hooks/useKdsSettings";
 import { useKdsSounds, type AlertSoundKey } from "@/hooks/useKdsSounds";
 import { KdsOrderCard, ITEM_CYCLE, STATUS_META } from "@/components/kds/KdsOrderCard";
@@ -289,7 +290,7 @@ function KdsView() {
         nextStatus === "preparing" ? "preparing"
         : nextStatus === "ready" ? "ready"
         : null;
-      const orderLabel = `#${ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}`;
+      const orderLabel = `#${formatOrderNumber(ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id)}`;
       const verb =
         nextStatus === "preparing" ? "moved to Preparing"
         : nextStatus === "ready" ? "ready to serve"
@@ -387,7 +388,7 @@ function KdsView() {
           paperSize: ticket.kitchen?.paperSize ?? "80mm",
           kotNumber: String(ticket.id),
           orderNumber: ticket.orderDisplayNumber
-            ? String(ticket.orderDisplayNumber)
+            ? formatOrderNumber(ticket.orderDisplayNumber)
             : (ticket.orderNumber ? String(ticket.orderNumber) : undefined),
           tableLabel: ticket.tableNumber ?? undefined,
           customerName: ticket.customerName ?? undefined,
@@ -742,7 +743,7 @@ function KdsView() {
 
       <KdsCancelSheet
         visible={!!cancelTarget}
-        orderLabel={cancelTarget ? `#${cancelTarget.orderDisplayNumber ?? cancelTarget.orderNumber ?? cancelTarget.id}` : ""}
+        orderLabel={cancelTarget ? `#${formatOrderNumber(cancelTarget.orderDisplayNumber ?? cancelTarget.orderNumber ?? cancelTarget.id)}` : ""}
         submitting={cancelSubmitting}
         onClose={() => !cancelSubmitting && setCancelTarget(null)}
         onSubmit={submitCancel}

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 interface OrderCardProps {
   orderNumber: string;
@@ -32,8 +33,9 @@ export function OrderCard({ orderNumber, displayNumber, internalNumber, tableLab
   // Match the web Orders list: primary is the short display number
   // (e.g. "DN-002"); the long internal id is shown small underneath when
   // it differs, so staff can still match it to receipts.
-  const primary = displayNumber ?? orderNumber;
-  const secondary = internalNumber ?? (displayNumber ? orderNumber : null);
+  const primary = formatOrderNumber(displayNumber ?? orderNumber);
+  const secondaryRaw = internalNumber ?? (displayNumber ? orderNumber : null);
+  const secondary = secondaryRaw ? formatOrderNumber(secondaryRaw) : null;
   const showSecondary = !!secondary && secondary !== primary;
 
   return (

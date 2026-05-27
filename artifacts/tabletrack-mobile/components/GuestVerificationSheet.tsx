@@ -6,6 +6,7 @@ import {
   useRejectGuestVerification,
   type GuestVerification,
 } from "@/hooks/useGuestVerifications";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 interface Props {
   verification: GuestVerification | null;
@@ -66,7 +67,7 @@ export function GuestVerificationSheet({ verification, tableLabel, onClose }: Pr
 
           <View style={styles.metaBlock}>
             <Text style={styles.tableLabel}>{tableLabel ? `Table ${tableLabel}` : v.tableId ? `Table ${v.tableId}` : "Order"}</Text>
-            <Text style={styles.metaText}>Order #{v.orderNumber} · waiting {waitText(v.heldAt)}</Text>
+            <Text style={styles.metaText}>Order #{formatOrderNumber(v.orderNumber)} · waiting {waitText(v.heldAt)}</Text>
             <Text style={styles.bodyText}>
               QR order placed without staff opening the table. Only accept if a guest is physically here.
             </Text>

@@ -285,7 +285,17 @@ export function useSetItemKitchenStatus() {
         { method: "PATCH", body: JSON.stringify({ status }) },
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["running-order"] });
+      // Bug #1 fix — the waiter's Ready queue derives its rows from three
+      // separate caches: the per-table running-order summary (item statuses),
+      // the floor-tables list (occupancy → which tables we even query), and
+      // the KDS ticket feed (so the chef view stays consistent). A single
+      // invalidate on "running-order" left the Ready row visible until the
+      // 20s table poll fired. Refetch all three families immediately so the
+      // served line drops off the screen the moment the API call resolves.
+      qc.invalidateQueries({ queryKey: ["running-order"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["tables"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["kitchen"], refetchType: "active" });
+      qc.invalidateQueries({ queryKey: ["kds"], refetchType: "active" });
     },
   });
 }

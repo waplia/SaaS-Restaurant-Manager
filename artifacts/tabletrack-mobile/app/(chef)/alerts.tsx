@@ -7,6 +7,7 @@ import { useChefColors } from "@/hooks/useChefColors";
 import { useAuth } from "@/context/AuthContext";
 import { useKdsTickets, type KdsTicket } from "@/hooks/useKdsTickets";
 import { useKdsSettings } from "@/hooks/useKdsSettings";
+import { formatOrderNumber } from "@/lib/orderNumber";
 
 type AlertKind = "new" | "delayed" | "cancelled" | "unavailable";
 
@@ -50,7 +51,7 @@ export default function ChefAlertsScreen() {
     for (const t of tickets) {
       const elapsed = t.elapsedMinutes ?? Math.floor((Date.now() - new Date(t.createdAt ?? Date.now()).getTime()) / 60000);
       const status = String(t.status);
-      const label = `KOT #${t.orderDisplayNumber ?? t.orderNumber ?? t.id}`;
+      const label = `KOT #${formatOrderNumber(t.orderDisplayNumber ?? t.orderNumber ?? t.id)}`;
       if (status === "cancelled") {
         out.push({
           id: `t-${t.id}-cancelled`, kind: "cancelled",

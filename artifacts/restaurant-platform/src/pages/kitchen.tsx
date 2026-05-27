@@ -8,7 +8,7 @@ import { AlertTriangle, Clock, RefreshCw, Volume2, VolumeX, Flag, Printer, ChefH
 import { useOrderCapacityConfig, useOrderCapacityStatus, usePauseOrders, useResumeOrders } from "@/lib/hooks-order-capacity";
 import { useAuth } from "@/lib/auth";
 import { Link } from "wouter";
-import { cn } from "@/lib/utils";
+import { cn, formatOrderNumber } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import type { KitchenTicket, KitchenTicketItem, Kitchen } from "@/lib/types";
@@ -138,9 +138,9 @@ function TicketCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="font-bold">{ticket.orderDisplayNumber ?? ticket.orderNumber}</p>
+            <p className="font-bold">{formatOrderNumber(ticket.orderDisplayNumber ?? ticket.orderNumber)}</p>
             {ticket.orderDisplayNumber && ticket.orderInternalNumber && (
-              <span className="font-mono text-[10px] text-muted-foreground/70">{ticket.orderInternalNumber}</span>
+              <span className="font-mono text-[10px] text-muted-foreground/70">{formatOrderNumber(ticket.orderInternalNumber)}</span>
             )}
             {hasAlertedDelay && (
               <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded-full animate-pulse">
