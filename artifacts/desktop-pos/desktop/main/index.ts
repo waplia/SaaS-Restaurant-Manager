@@ -111,17 +111,31 @@ function buildShellUrl(): string {
 }
 
 function applyCsp(): void {
-  const apiOrigin = (() => {
-    try { return new URL(getSettings().apiBaseUrl).origin; }
-    catch { return "https://khanalagao.com"; }
-  })();
+  // Re-derive the API origin on every response so an operator changing
+  // `apiBaseUrl` from the Connection Settings screen takes effect without
+  // an app restart. Falls back to the default host if the user typed an
+  // unparseable URL (the settings screen validates, but be defensive).
+  // Also derive the matching ws/wss origin so socket.io upgrades work
+  // against a custom server.
+  const deriveOrigins = (): { http: string; ws: string } => {
+    try {
+      const u = new URL(getSettings().apiBaseUrl);
+      return {
+        http: u.origin,
+        ws: `${u.protocol === "https:" ? "wss:" : "ws:"}//${u.host}`,
+      };
+    } catch {
+      return { http: DEFAULT_SETTINGS.apiBaseUrl, ws: "wss://khanalagao.com" };
+    }
+  };
   session.defaultSession.webRequest.onHeadersReceived((details, cb) => {
+    const { http, ws } = deriveOrigins();
     cb({
       responseHeaders: {
         ...details.responseHeaders,
         "Content-Security-Policy": [
           `default-src 'self'; ` +
-          `connect-src 'self' ${apiOrigin} ws://localhost:5180 http://localhost:5180; ` +
+          `connect-src 'self' ${http} ${ws} ws://localhost:5180 http://localhost:5180; ` +
           `img-src 'self' data: blob: https:; ` +
           `style-src 'self' 'unsafe-inline'; ` +
           `script-src 'self'; ` +
@@ -221,12 +235,21 @@ async function sendRawToPrinter(printerName: string, bytes: Buffer): Promise<voi
         return;
       }
     } catch { /* fall through to PRINT shell-out */ }
-    const tmp = path.join(app.getPath("temp"), `tt_raw_${Date.now()}.bin`);
-    await promisify(fs.writeFile)(tmp, bytes);
-    const { exec } = await import("node:child_process");
-    await new Promise<void>((resolve, reject) => {
-      exec(`PRINT /D:"${printerName}" "${tmp}"`, (err) => err ? reject(err) : resolve());
-    });
+    // Windows PRINT shell-out fallback. Wrap the whole sequence in
+    // try/finally so a write failure, a missing printer, or an exec
+    // error is surfaced to the caller as a rejected promise (instead of
+    // crashing the main process with an unhandled rejection) and so the
+    // temp file is always cleaned up.
+    const tmp = path.join(app.getPath("temp"), `tt_raw_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.bin`);
+    try {
+      await promisify(fs.writeFile)(tmp, bytes);
+      const { exec } = await import("node:child_process");
+      await new Promise<void>((resolve, reject) => {
+        exec(`PRINT /D:"${printerName}" "${tmp}"`, (err) => err ? reject(err) : resolve());
+      });
+    } finally {
+      void promisify(fs.unlink)(tmp).catch(() => { /* file may not exist */ });
+    }
   } else {
     const { spawn } = await import("node:child_process");
     await new Promise<void>((resolve, reject) => {
