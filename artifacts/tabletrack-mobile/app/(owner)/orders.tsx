@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Alert } from "@/components/ui/AppAlert";
 import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, ScrollView, TextInput, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -17,7 +18,8 @@ import { useAuth } from "@/context/AuthContext";
 
 type StatusFilter = "all" | "new" | "preparing" | "ready" | "completed";
 type TypeFilter = "all" | "qr" | "dine_in" | "takeaway" | "delivery";
-type DateFilter = "today" | "7d" | "30d" | "all";
+type DateFilter = "today" | "yesterday" | "7d" | "30d" | "this_month" | "custom" | "all";
+type CustomRange = { from: Date; to: Date };
 
 const STATUS_CHIPS: { key: StatusFilter; label: string; tone?: string }[] = [
   { key: "all", label: "All" },
@@ -35,21 +37,41 @@ const TYPE_CHIPS: { key: TypeFilter; label: string; icon?: keyof typeof Ionicons
 ];
 const DATE_CHIPS: { key: DateFilter; label: string }[] = [
   { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
   { key: "7d", label: "Last 7 days" },
   { key: "30d", label: "Last 30 days" },
+  { key: "this_month", label: "This month" },
   { key: "all", label: "All time" },
+  { key: "custom", label: "Custom range" },
 ];
 
-function sinceIsoFor(d: DateFilter): string | null {
-  if (d === "all") return null;
+function rangeFor(d: DateFilter, custom: CustomRange | null): { since: string | null; until: string | null } {
   const now = new Date();
-  if (d === "today") {
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return start.toISOString();
+  const sod = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const eod = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate(), 23, 59, 59, 999);
+  if (d === "all") return { since: null, until: null };
+  if (d === "today") return { since: sod(now).toISOString(), until: eod(now).toISOString() };
+  if (d === "yesterday") {
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    return { since: sod(y).toISOString(), until: eod(y).toISOString() };
   }
-  const days = d === "7d" ? 7 : 30;
-  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  return start.toISOString();
+  if (d === "7d") return { since: sod(new Date(now.getTime() - 6 * 86400000)).toISOString(), until: eod(now).toISOString() };
+  if (d === "30d") return { since: sod(new Date(now.getTime() - 29 * 86400000)).toISOString(), until: eod(now).toISOString() };
+  if (d === "this_month") return { since: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), until: eod(now).toISOString() };
+  if (d === "custom" && custom) return { since: sod(custom.from).toISOString(), until: eod(custom.to).toISOString() };
+  return { since: null, until: null };
+}
+
+function fmtShort(d: Date): string {
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function dateFilterLabel(d: DateFilter, custom: CustomRange | null): string {
+  if (d === "custom") {
+    if (!custom) return "Custom range";
+    return `${fmtShort(custom.from)} – ${fmtShort(custom.to)}`;
+  }
+  return DATE_CHIPS.find((c) => c.key === d)?.label ?? d;
 }
 
 export default function OrdersScreen() {
@@ -61,6 +83,7 @@ export default function OrdersScreen() {
   const [status, setStatus] = useState<StatusFilter>("all");
   const [type, setType] = useState<TypeFilter>("all");
   const [dateRange, setDateRange] = useState<DateFilter>("today");
+  const [customRange, setCustomRange] = useState<CustomRange | null>(null);
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   // Free-text search box. Debounced so we don't hammer the server on every
@@ -78,17 +101,17 @@ export default function OrdersScreen() {
 
   const statusLabel = STATUS_CHIPS.find((c) => c.key === status)?.label ?? status;
   const typeLabel = TYPE_CHIPS.find((c) => c.key === type)?.label ?? type;
-  const dateLabel = DATE_CHIPS.find((c) => c.key === dateRange)?.label ?? dateRange;
+  const dateLabel = dateFilterLabel(dateRange, customRange);
 
   const activeChips: { key: string; label: string; onClear: () => void }[] = [];
-  if (dateRange !== "today") activeChips.push({ key: "date", label: dateLabel, onClear: () => setDateRange("today") });
+  if (dateRange !== "today") activeChips.push({ key: "date", label: dateLabel, onClear: () => { setDateRange("today"); setCustomRange(null); } });
   if (status !== "all") activeChips.push({ key: "status", label: statusLabel, onClear: () => setStatus("all") });
   if (type !== "all") activeChips.push({ key: "type", label: typeLabel, onClear: () => setType("all") });
   const activeFilterCount = activeChips.length;
 
   // Map "new" filter to pending API status.
   const apiStatus = status === "new" ? "pending" : status === "preparing" ? "in_progress" : status;
-  const since = sinceIsoFor(dateRange);
+  const { since, until } = rangeFor(dateRange, customRange);
   // Server-side type filter when possible. "qr" is a sourceChannel, not an
   // orderType, so it still falls through to the client-side filter below.
   const apiOrderType: string | null = type === "all" || type === "qr" ? null : type;
@@ -96,6 +119,7 @@ export default function OrdersScreen() {
   if (apiStatus !== "all") params.status = apiStatus;
   if (apiOrderType) params.orderType = apiOrderType;
   if (since) params.since = since;
+  if (until) params.until = until;
   if (search) params.search = search;
   if (effectiveBranchId != null) params.branchId = effectiveBranchId;
 
@@ -213,16 +237,19 @@ export default function OrdersScreen() {
         status={status}
         type={type}
         dateRange={dateRange}
+        customRange={customRange}
         onApply={(next) => {
           setStatus(next.status);
           setType(next.type);
           setDateRange(next.dateRange);
+          setCustomRange(next.customRange);
           setFilterSheetOpen(false);
         }}
         onReset={() => {
           setStatus("all");
           setType("all");
           setDateRange("today");
+          setCustomRange(null);
         }}
       />
 
@@ -320,6 +347,10 @@ const styles = StyleSheet.create({
   sheetResetText: { fontSize: 14, fontFamily: "Inter_700Bold" },
   sheetApplyBtn: { flex: 2, alignItems: "center", justifyContent: "center", height: 46, borderRadius: 12 },
   sheetApplyText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
+  customRangeRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  customDateBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 },
+  customDateLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 },
+  customDateValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   list: { padding: 16 },
   actionRow: { flexDirection: "row", gap: 8, marginTop: 6 },
   rejectBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
@@ -334,24 +365,53 @@ interface FilterSheetProps {
   status: StatusFilter;
   type: TypeFilter;
   dateRange: DateFilter;
-  onApply: (next: { status: StatusFilter; type: TypeFilter; dateRange: DateFilter }) => void;
+  customRange: CustomRange | null;
+  onApply: (next: { status: StatusFilter; type: TypeFilter; dateRange: DateFilter; customRange: CustomRange | null }) => void;
   onReset: () => void;
 }
 
-function FilterSheet({ visible, onClose, status, type, dateRange, onApply, onReset }: FilterSheetProps) {
+function FilterSheet({ visible, onClose, status, type, dateRange, customRange, onApply, onReset }: FilterSheetProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [draftStatus, setDraftStatus] = useState<StatusFilter>(status);
   const [draftType, setDraftType] = useState<TypeFilter>(type);
   const [draftDate, setDraftDate] = useState<DateFilter>(dateRange);
+  const [draftCustom, setDraftCustom] = useState<CustomRange>(() => {
+    const now = new Date();
+    const from = customRange?.from ?? new Date(now.getTime() - 6 * 86400000);
+    const to = customRange?.to ?? now;
+    return { from, to };
+  });
+  const [showPicker, setShowPicker] = useState<null | "from" | "to">(null);
 
   React.useEffect(() => {
     if (visible) {
       setDraftStatus(status);
       setDraftType(type);
       setDraftDate(dateRange);
+      const now = new Date();
+      setDraftCustom({
+        from: customRange?.from ?? new Date(now.getTime() - 6 * 86400000),
+        to: customRange?.to ?? now,
+      });
+      setShowPicker(null);
     }
-  }, [visible, status, type, dateRange]);
+  }, [visible, status, type, dateRange, customRange]);
+
+  const handlePickerChange = (which: "from" | "to") => (event: DateTimePickerEvent, selected?: Date) => {
+    // Android dismisses the picker after a selection; iOS keeps it inline.
+    if (Platform.OS !== "ios") setShowPicker(null);
+    if (event.type === "dismissed" || !selected) return;
+    setDraftCustom((prev) => {
+      const next = { ...prev, [which]: selected } as CustomRange;
+      // Keep from <= to.
+      if (next.from > next.to) {
+        if (which === "from") next.to = next.from;
+        else next.from = next.to;
+      }
+      return next;
+    });
+  };
 
   const renderChip = <T extends string>(active: boolean, label: string, onPress: () => void, key: T) => (
     <Pressable
@@ -387,6 +447,33 @@ function FilterSheet({ visible, onClose, status, type, dateRange, onApply, onRes
               <View style={styles.sheetChipsGrid}>
                 {DATE_CHIPS.map((c) => renderChip(draftDate === c.key, c.label, () => setDraftDate(c.key), c.key))}
               </View>
+              {draftDate === "custom" ? (
+                <View style={styles.customRangeRow}>
+                  <Pressable
+                    onPress={() => setShowPicker(showPicker === "from" ? null : "from")}
+                    style={[styles.customDateBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  >
+                    <Text style={[styles.customDateLabel, { color: colors.mutedForeground }]}>From</Text>
+                    <Text style={[styles.customDateValue, { color: colors.foreground }]}>{fmtShort(draftCustom.from)}, {draftCustom.from.getFullYear()}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setShowPicker(showPicker === "to" ? null : "to")}
+                    style={[styles.customDateBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  >
+                    <Text style={[styles.customDateLabel, { color: colors.mutedForeground }]}>To</Text>
+                    <Text style={[styles.customDateValue, { color: colors.foreground }]}>{fmtShort(draftCustom.to)}, {draftCustom.to.getFullYear()}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {showPicker ? (
+                <DateTimePicker
+                  value={showPicker === "from" ? draftCustom.from : draftCustom.to}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  maximumDate={new Date()}
+                  onChange={handlePickerChange(showPicker)}
+                />
+              ) : null}
             </View>
 
             <View style={[styles.sheetSection, { borderTopColor: colors.border }]}>
@@ -410,6 +497,7 @@ function FilterSheet({ visible, onClose, status, type, dateRange, onApply, onRes
                 setDraftStatus("all");
                 setDraftType("all");
                 setDraftDate("today");
+                setShowPicker(null);
                 onReset();
               }}
               style={[styles.sheetResetBtn, { borderColor: colors.border }]}
@@ -417,7 +505,12 @@ function FilterSheet({ visible, onClose, status, type, dateRange, onApply, onRes
               <Text style={[styles.sheetResetText, { color: colors.foreground }]}>Reset</Text>
             </Pressable>
             <Pressable
-              onPress={() => onApply({ status: draftStatus, type: draftType, dateRange: draftDate })}
+              onPress={() => onApply({
+                status: draftStatus,
+                type: draftType,
+                dateRange: draftDate,
+                customRange: draftDate === "custom" ? draftCustom : null,
+              })}
               style={[styles.sheetApplyBtn, { backgroundColor: colors.primary }]}
             >
               <Text style={styles.sheetApplyText}>Apply filters</Text>

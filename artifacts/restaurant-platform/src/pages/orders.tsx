@@ -305,7 +305,7 @@ function CurbsideTab() {
 }
 
 type DateRange = { from?: Date; to?: Date };
-type DatePreset = "today" | "yesterday" | "7d" | "30d" | "this_month" | "last_month" | "all";
+type DatePreset = "today" | "yesterday" | "7d" | "30d" | "this_month" | "last_month" | "all" | "custom";
 
 const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: "today", label: "Today" },
@@ -315,6 +315,7 @@ const DATE_PRESETS: { key: DatePreset; label: string }[] = [
   { key: "this_month", label: "This month" },
   { key: "last_month", label: "Last month" },
   { key: "all", label: "All time" },
+  { key: "custom", label: "Custom range" },
 ];
 
 function rangeForPreset(p: DatePreset): DateRange {
@@ -364,6 +365,7 @@ const STATUS_OPTIONS = [
 ];
 const TYPE_OPTIONS = [
   { value: "all", label: "All types" },
+  { value: "qr", label: "QR" },
   { value: "dine_in", label: "Dine-in" },
   { value: "takeaway", label: "Takeaway" },
   { value: "delivery", label: "Delivery" },
@@ -395,9 +397,12 @@ export default function OrdersPage() {
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   const [tab, setTab] = useState<"all" | "curbside">("all");
+  // "qr" is a sourceChannel, not an orderType, so we don't pass it to the
+  // server filter — we filter client-side below to keep only QR-sourced rows.
+  const apiOrderType = orderTypeFilter !== "all" && orderTypeFilter !== "qr" ? orderTypeFilter : undefined;
   const { data: ordersData } = useOrders({
     status: statusFilter !== "all" ? statusFilter : undefined,
-    orderType: orderTypeFilter !== "all" ? orderTypeFilter : undefined,
+    orderType: apiOrderType,
     paymentStatus: paymentFilter !== "all" ? paymentFilter : undefined,
     since: dateRange.from?.toISOString(),
     until: dateRange.to?.toISOString(),
@@ -406,7 +411,14 @@ export default function OrdersPage() {
   const { data: heldVerifications = [] } = useGuestVerifications();
   const heldOrderIds = useMemo(() => new Set(heldVerifications.map(v => v.orderId)), [heldVerifications]);
 
-  const orders: Order[] = ordersData?.data ?? [];
+  const allOrders: Order[] = ordersData?.data ?? [];
+  const orders: Order[] = useMemo(() => {
+    if (orderTypeFilter !== "qr") return allOrders;
+    return allOrders.filter((o) => {
+      const src = ((o as unknown as { sourceChannel?: string }).sourceChannel ?? "").toLowerCase();
+      return src === "qr" || src === "self-order" || src === "self_order";
+    });
+  }, [allOrders, orderTypeFilter]);
 
   const resetFilters = () => {
     setStatusFilter("all");
@@ -466,24 +478,46 @@ export default function OrdersPage() {
                   <PopoverContent className="w-auto p-0" align="start">
                     <div className="flex flex-col sm:flex-row">
                       <div className="flex flex-row sm:flex-col gap-1 p-2 border-b sm:border-b-0 sm:border-r border-border sm:min-w-[140px] overflow-x-auto">
-                        {DATE_PRESETS.map(p => {
-                          const presetRange = rangeForPreset(p.key);
-                          const active = (p.key === "all" && !dateRange.from && !dateRange.to)
-                            || (presetRange.from && presetRange.to && dateRange.from && dateRange.to
-                                && sameDay(presetRange.from, dateRange.from) && sameDay(presetRange.to, dateRange.to));
-                          return (
-                            <button
-                              key={p.key}
-                              onClick={() => { setDateRange(rangeForPreset(p.key)); setDatePopOpen(false); }}
-                              className={cn(
-                                "text-left text-sm px-3 py-1.5 rounded whitespace-nowrap transition-colors",
-                                active ? "bg-primary text-primary-foreground" : "hover:bg-accent",
-                              )}
-                            >
-                              {p.label}
-                            </button>
-                          );
-                        })}
+                        {(() => {
+                          const matchesAnyPreset = DATE_PRESETS.some((pp) => {
+                            if (pp.key === "custom") return false;
+                            if (pp.key === "all") return !dateRange.from && !dateRange.to;
+                            const pr = rangeForPreset(pp.key);
+                            return !!(pr.from && pr.to && dateRange.from && dateRange.to
+                              && sameDay(pr.from, dateRange.from) && sameDay(pr.to, dateRange.to));
+                          });
+                          return DATE_PRESETS.map((p) => {
+                            let active = false;
+                            if (p.key === "custom") {
+                              active = !matchesAnyPreset;
+                            } else if (p.key === "all") {
+                              active = !dateRange.from && !dateRange.to;
+                            } else {
+                              const pr = rangeForPreset(p.key);
+                              active = !!(pr.from && pr.to && dateRange.from && dateRange.to
+                                && sameDay(pr.from, dateRange.from) && sameDay(pr.to, dateRange.to));
+                            }
+                            return (
+                              <button
+                                key={p.key}
+                                onClick={() => {
+                                  if (p.key === "custom") {
+                                    // Keep popover open so the user can pick a range in the calendar
+                                    return;
+                                  }
+                                  setDateRange(rangeForPreset(p.key));
+                                  setDatePopOpen(false);
+                                }}
+                                className={cn(
+                                  "text-left text-sm px-3 py-1.5 rounded whitespace-nowrap transition-colors",
+                                  active ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+                                )}
+                              >
+                                {p.label}
+                              </button>
+                            );
+                          });
+                        })()}
                       </div>
                       <div className="p-2">
                         <Calendar
