@@ -86,7 +86,13 @@ export default function CashierShiftScreen() {
       qc.invalidateQueries({ queryKey: ["cash-register-current"] });
     },
     onError: (e: Error) => {
-      Alert.alert("Could not open shift", e.message);
+      // Dismiss the sheet first — on Android, RN can't render a Modal
+      // (the themed alert) stacked on top of another Modal (the bottom
+      // sheet), so the error message would be invisible otherwise.
+      setOpenSheet(false);
+      setTimeout(() => {
+        Alert.alert("Could not open shift", e.message);
+      }, 250);
     },
   });
 
@@ -109,7 +115,12 @@ export default function CashierShiftScreen() {
       qc.invalidateQueries({ queryKey: ["cash-register-session"] });
     },
     onError: (e: Error) => {
-      Alert.alert("Could not close shift", e.message);
+      // See openMut.onError — dismiss the bottom-sheet Modal first so
+      // the alert Modal is actually visible (Android cannot stack Modals).
+      setCloseSheet(false);
+      setTimeout(() => {
+        Alert.alert("Could not close shift", e.message);
+      }, 250);
     },
   });
 
@@ -126,7 +137,12 @@ export default function CashierShiftScreen() {
       qc.invalidateQueries({ queryKey: ["cash-register-session"] });
     },
     onError: (e: Error) => {
-      Alert.alert("Could not record movement", e.message);
+      // See openMut.onError — dismiss the bottom-sheet Modal first so
+      // the alert Modal is actually visible (Android cannot stack Modals).
+      setMoveSheet(null);
+      setTimeout(() => {
+        Alert.alert("Could not record movement", e.message);
+      }, 250);
     },
   });
 
