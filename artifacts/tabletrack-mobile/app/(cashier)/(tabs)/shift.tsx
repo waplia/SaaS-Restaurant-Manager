@@ -479,10 +479,9 @@ export default function CashierShiftScreen() {
           multiline
         />
         <AppButton
-          label={openTotal > 0 ? "Open shift" : "Count cash to continue"}
+          label="Open shift"
           leftIcon="lock-open-outline"
           loading={openMut.isPending}
-          disabled={openTotal <= 0}
           onPress={submitOpen}
         />
       </AppBottomSheet>
@@ -573,7 +572,6 @@ export default function CashierShiftScreen() {
         <AppButton
           label={moveSheet === "cash_in" ? "Record cash in" : "Record cash out"}
           loading={movementMut.isPending}
-          disabled={!movementAmtValid || movementInsufficient || movementReasonMissing}
           onPress={submitMovement}
         />
       </AppBottomSheet>
