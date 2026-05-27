@@ -1,0 +1,105 @@
+Use this short prompt:
+
+```text
+Fix bill/invoice templates across KhanaLagao.
+
+Current issue:
+Bills are showing differently in web, mobile app, desktop POS, QR orders, invoices, print, and share/PDF. Make one unified bill template system so every place uses the same bill format.
+
+Do this:
+
+1. Create a central Bill Template System
+Location:
+Restaurant Admin → Settings → Billing → Bill Templates
+
+2. Add default templates:
+- Thermal Receipt 58mm
+- Thermal Receipt 80mm
+- A4 Invoice
+- Compact KOT Bill
+- QR Order Bill
+- Delivery Bill
+- Tax Invoice / GST Bill
+- Simple Non-GST Bill
+
+3. Restaurant should be able to choose default template for:
+- POS bill
+- Desktop POS bill
+- Mobile app bill
+- QR order bill
+- Delivery bill
+- A4 invoice
+- WhatsApp/share PDF
+- Email invoice
+
+4. Every bill should use the same data source and same calculation logic:
+- Restaurant name/logo
+- Outlet address
+- GST/FSSAI if available
+- Bill number
+- Order display number
+- Internal invoice number
+- Date/time
+- Cashier/waiter
+- Table/order type
+- Customer name/phone if available
+- Items
+- Quantity
+- Rate
+- Add-ons/modifiers
+- Item notes
+- Discount
+- Tax/GST
+- Service charge
+- Delivery charge
+- Round off
+- Grand total
+- Payment method
+- Payment status
+- QR/payment link if enabled
+- Footer message
+- Terms/return/refund note
+
+5. Add template customization:
+- Show/hide logo
+- Show/hide GST
+- Show/hide FSSAI
+- Show/hide customer details
+- Show/hide item notes
+- Show/hide modifiers
+- Footer text
+- Thank you message
+- QR code on bill
+- Print size 58mm/80mm/A4
+- Font size small/medium/large
+
+6. Fix all places to use selected bill template:
+- Web POS
+- Desktop POS
+- Mobile app
+- QR menu order
+- Kitchen/KOT if needed
+- Invoice PDF
+- WhatsApp share
+- Email invoice
+- Print/reprint bill
+- Order detail bill preview
+
+7. Add preview and test print:
+- Preview bill
+- Print test bill
+- Download sample PDF
+- Send test invoice
+
+Important:
+Do not keep separate hardcoded bill designs in different screens. Create one reusable bill rendering component/service and use it everywhere. Bills should look same across web, app, desktop, print, PDF, WhatsApp, and email unless restaurant selects a different template.
+
+Acceptance:
+- Same order shows same bill total everywhere.
+- Same bill template is used across web/mobile/desktop/PDF/print.
+- Restaurant can change default template from admin.
+- Thermal and A4 formats work.
+- No calculation mismatch.
+- No missing tax/discount/payment data.
+- Reprint uses same saved bill snapshot.
+```

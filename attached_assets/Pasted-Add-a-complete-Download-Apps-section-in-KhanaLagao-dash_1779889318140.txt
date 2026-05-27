@@ -1,0 +1,306 @@
+Add a complete “Download Apps” section in KhanaLagao dashboard and Super Admin.
+
+Goal:
+Restaurant users should easily download KhanaLagao apps from their dashboard:
+- Android app
+- iOS app
+- Windows desktop POS app
+- macOS desktop POS app
+- Optional web/PWA install guide
+
+Super Admin should be able to manage these app download links, upload files, versions, release notes, and visibility.
+
+Do not use mock links. If link/file is not added by Super Admin, show “Coming soon / Not available yet” clearly.
+
+====================================================
+1. RESTAURANT DASHBOARD ENTRY
+====================================================
+
+Add a card/button on restaurant dashboard:
+
+Title:
+Download Apps
+
+Subtitle:
+Install KhanaLagao on mobile, desktop, and POS devices.
+
+Button:
+Open Downloads
+
+Also add in sidebar/menu:
+Settings → Download Apps
+or
+Help → Download Apps
+
+====================================================
+2. DOWNLOAD APPS PAGE
+====================================================
+
+Create page:
+
+Restaurant Admin → Download Apps
+
+Design should be modern and clean.
+
+Show app download cards:
+
+1. Android App
+- Icon: Android
+- Name: KhanaLagao Business Android
+- Description: Manage orders, staff, inventory, alerts and POS from Android.
+- Button: Download APK / Open Play Store
+- Version
+- Last updated
+- Size if uploaded
+- Installation guide button
+
+2. iOS App
+- Icon: Apple
+- Name: KhanaLagao Business iOS
+- Description: Manage your restaurant from iPhone/iPad.
+- Button: Open App Store / TestFlight
+- Version
+- Last updated
+- Installation guide button
+
+3. Windows Desktop POS
+- Icon: Windows
+- Name: KhanaLagao POS for Windows
+- Description: Full desktop POS with printing, KOT, billing and payments.
+- Button: Download EXE
+- Version
+- Last updated
+- Size
+- System requirements
+- Installation guide button
+
+4. macOS Desktop POS
+- Icon: Apple/Mac
+- Name: KhanaLagao POS for macOS
+- Description: Desktop POS for Mac counters with printer support.
+- Button: Download DMG
+- Version
+- Last updated
+- Size
+- System requirements
+- Installation guide button
+
+5. Web/PWA
+- Icon: Browser
+- Name: KhanaLagao Web App
+- Description: Use KhanaLagao directly from browser or install as PWA.
+- Button: Open Web App
+- Guide: How to install on desktop/mobile
+
+Each card should show:
+- Platform icon
+- App name
+- Short description
+- Version
+- Release date
+- Download/open button
+- Guide button
+- Release notes link
+- Status: Available / Not available / Update available
+
+====================================================
+3. INSTALLATION GUIDES
+====================================================
+
+Add guide sections/modal for each platform.
+
+Android guide:
+- Download APK or open Play Store.
+- Allow install from unknown sources if APK.
+- Install app.
+- Login with restaurant account.
+
+iOS guide:
+- Open App Store/TestFlight.
+- Install app.
+- Login with restaurant account.
+
+Windows guide:
+- Download .exe installer.
+- Run installer.
+- Allow Windows Defender if prompted.
+- Login and select outlet/counter.
+- Setup printer from Hardware page.
+
+macOS guide:
+- Download .dmg.
+- Drag app to Applications.
+- If blocked, allow from Privacy & Security.
+- Login and setup printer.
+
+PWA guide:
+- Open web app in Chrome/Edge/Safari.
+- Click Install/Add to Home Screen.
+- Login and use.
+
+====================================================
+4. SUPER ADMIN APP DOWNLOAD MANAGER
+====================================================
+
+Create Super Admin page:
+
+Super Admin → App Downloads
+
+Super Admin can manage:
+
+For each app/platform:
+- Platform: Android / iOS / Windows / macOS / Web/PWA
+- App name
+- Version
+- Build number
+- Release date
+- Status: active/inactive/coming soon/deprecated
+- Download type:
+  - External link
+  - Uploaded file
+  - Store link
+- Upload file:
+  - APK
+  - AAB optional internal
+  - EXE
+  - DMG
+  - ZIP
+- External URL:
+  - Play Store link
+  - App Store link
+  - TestFlight link
+  - Direct download URL
+- File size
+- Minimum OS version
+- Release notes
+- Installation guide
+- Force update yes/no
+- Recommended update yes/no
+- Visible to restaurants yes/no
+- Visible by plan yes/no
+- Visible by restaurant override optional
+
+Super Admin actions:
+- Add app download
+- Edit
+- Upload new version
+- Archive old version
+- Mark latest
+- Preview restaurant download page
+- Copy link
+- Delete/archive
+
+====================================================
+5. DATABASE TABLE
+====================================================
+
+Create table:
+
+app_downloads
+- id
+- platform: android/ios/windows/macos/web
+- app_name
+- version
+- build_number
+- release_date
+- status
+- download_type: upload/link/store
+- download_url
+- uploaded_file_url
+- file_size
+- icon_url nullable
+- minimum_os_version
+- release_notes
+- installation_guide
+- is_latest
+- is_visible
+- force_update
+- recommended_update
+- allowed_plans_json nullable
+- allowed_restaurants_json nullable
+- created_by
+- created_at
+- updated_at
+
+Optional:
+app_download_logs
+- id
+- restaurant_id
+- user_id
+- app_download_id
+- platform
+- action: viewed/downloaded/opened_guide
+- ip_address
+- user_agent
+- created_at
+
+====================================================
+6. DOWNLOAD TRACKING
+====================================================
+
+Track:
+- Page views
+- App downloads
+- Platform selected
+- Restaurant/user who downloaded
+- Latest version downloads
+- Old version downloads
+
+Super Admin dashboard should show:
+- Android downloads
+- iOS clicks
+- Windows downloads
+- macOS downloads
+- Most downloaded app
+- Restaurants still using old version if version tracking exists
+
+====================================================
+7. UI DESIGN REQUIREMENTS
+====================================================
+
+Download page should look premium:
+- Large platform cards
+- Official-style icons
+- Clear CTA buttons
+- Release notes
+- Installation guide
+- System requirements
+- Update badges
+- Responsive mobile/tablet/desktop layout
+- Empty state if no downloads configured
+
+Empty state:
+“No app downloads are available yet. Please contact support.”
+
+If app is coming soon:
+Show disabled card:
+“Coming soon”
+
+====================================================
+8. PERMISSIONS
+====================================================
+
+Restaurant users:
+- Can view/download apps if allowed.
+
+Super Admin:
+- Can upload/manage app download links.
+
+Do not allow restaurant admin to change global app download files or links.
+
+====================================================
+9. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Dashboard shows Download Apps card.
+- Download Apps page exists and is well designed.
+- Android, iOS, Windows, macOS, and Web/PWA cards are shown.
+- Super Admin can add/edit/upload app download links/files.
+- Restaurant download page uses Super Admin configured data.
+- Installation guides are available.
+- Release notes are visible.
+- Download tracking works.
+- No mock links are shown as real.
+- If no link/file exists, show clean unavailable state.
+- Build passes.
