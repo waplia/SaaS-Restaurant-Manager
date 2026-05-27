@@ -178,17 +178,34 @@ export default function CashierShiftScreen() {
     });
   };
 
+  // Out-types can't push the drawer negative — server enforces this atomically
+  // inside the locked session transaction (FOR UPDATE), so two simultaneous
+  // cash-outs can't race past the available cash. We mirror the check here
+  // so the cashier gets instant feedback instead of a 400 round-trip.
+  const movementAmt = Number(movement.amount);
+  const movementAmtValid = isFinite(movementAmt) && movementAmt > 0;
+  const isMovementOut = moveSheet === "cash_out";
+  const movementInsufficient =
+    movementAmtValid && isMovementOut && movementAmt > expectedCash + 0.001;
+  const movementReasonMissing = !movement.reason.trim();
+
   const submitMovement = () => {
-    const amt = Number(movement.amount);
-    if (!isFinite(amt) || amt <= 0) {
+    if (!movementAmtValid) {
       Alert.alert("Amount required", "Enter a positive amount.");
       return;
     }
-    if (!movement.reason.trim()) {
+    if (movementInsufficient) {
+      Alert.alert(
+        "Not enough cash in the drawer",
+        `Only ${fmtCurrency(expectedCash)} is available right now — you can't take out ${fmtCurrency(movementAmt)}.`,
+      );
+      return;
+    }
+    if (movementReasonMissing) {
       Alert.alert("Reason required", "Briefly describe why cash is being moved.");
       return;
     }
-    movementMut.mutate({ type: moveSheet!, amount: amt, reason: movement.reason.trim() });
+    movementMut.mutate({ type: moveSheet!, amount: movementAmt, reason: movement.reason.trim() });
   };
 
   const printReport = async () => {
@@ -462,9 +479,10 @@ export default function CashierShiftScreen() {
           multiline
         />
         <AppButton
-          label="Open shift"
+          label={openTotal > 0 ? "Open shift" : "Count cash to continue"}
           leftIcon="lock-open-outline"
           loading={openMut.isPending}
+          disabled={openTotal <= 0}
           onPress={submitOpen}
         />
       </AppBottomSheet>
@@ -539,7 +557,13 @@ export default function CashierShiftScreen() {
           onChangeText={(v) => setMovement((m) => ({ ...m, amount: v.replace(/[^\d.]/g, "") }))}
           keyboardType={Platform.OS === "web" ? "default" : "decimal-pad"}
           placeholder="0"
+          error={movementInsufficient ? `Only ${fmtCurrency(expectedCash)} in drawer right now` : null}
         />
+        {isMovementOut ? (
+          <AppText variant="micro" color={movementInsufficient ? "destructive" : "mutedForeground"}>
+            Available in drawer: {fmtCurrency(expectedCash)}
+          </AppText>
+        ) : null}
         <AppInput
           label="Reason"
           value={movement.reason}
@@ -549,6 +573,7 @@ export default function CashierShiftScreen() {
         <AppButton
           label={moveSheet === "cash_in" ? "Record cash in" : "Record cash out"}
           loading={movementMut.isPending}
+          disabled={!movementAmtValid || movementInsufficient || movementReasonMissing}
           onPress={submitMovement}
         />
       </AppBottomSheet>
