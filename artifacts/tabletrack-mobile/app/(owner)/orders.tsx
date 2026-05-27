@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Alert } from "@/components/ui/AppAlert";
-import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, ScrollView, TextInput } from "react-native";
+import { View, Text, FlatList, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, ScrollView, TextInput, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -62,6 +62,7 @@ export default function OrdersScreen() {
   const [type, setType] = useState<TypeFilter>("all");
   const [dateRange, setDateRange] = useState<DateFilter>("today");
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   // Free-text search box. Debounced so we don't hammer the server on every
   // keystroke, and trimmed/lower-bounded so a single character doesn't run
   // a near-unbounded ILIKE on the orders table.
@@ -74,6 +75,16 @@ export default function OrdersScreen() {
     }, 250);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  const statusLabel = STATUS_CHIPS.find((c) => c.key === status)?.label ?? status;
+  const typeLabel = TYPE_CHIPS.find((c) => c.key === type)?.label ?? type;
+  const dateLabel = DATE_CHIPS.find((c) => c.key === dateRange)?.label ?? dateRange;
+
+  const activeChips: { key: string; label: string; onClear: () => void }[] = [];
+  if (dateRange !== "today") activeChips.push({ key: "date", label: dateLabel, onClear: () => setDateRange("today") });
+  if (status !== "all") activeChips.push({ key: "status", label: statusLabel, onClear: () => setStatus("all") });
+  if (type !== "all") activeChips.push({ key: "type", label: typeLabel, onClear: () => setType("all") });
+  const activeFilterCount = activeChips.length;
 
   // Map "new" filter to pending API status.
   const apiStatus = status === "new" ? "pending" : status === "preparing" ? "in_progress" : status;
@@ -163,42 +174,57 @@ export default function OrdersScreen() {
           ) : null}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
-          {STATUS_CHIPS.map((c) => {
-            const active = status === c.key;
-            return (
-              <Pressable key={c.key} onPress={() => setStatus(c.key)} style={[styles.pill, { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.card }]}>
-                {c.tone && !active ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.tone }} /> : null}
-                <Text style={[styles.pillText, { color: active ? "#fff" : colors.mutedForeground }]}>{c.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <View style={styles.filterRow}>
+          <Pressable
+            onPress={() => setFilterSheetOpen(true)}
+            style={[styles.filterBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            accessibilityLabel="Open filters"
+          >
+            <Ionicons name="options-outline" size={16} color={colors.foreground} />
+            <Text style={[styles.filterBtnText, { color: colors.foreground }]}>Filters</Text>
+            {activeFilterCount > 0 ? (
+              <View style={[styles.filterBadge, { backgroundColor: colors.primary }]}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
-          {DATE_CHIPS.map((c) => {
-            const active = dateRange === c.key;
-            return (
-              <Pressable key={c.key} onPress={() => setDateRange(c.key)} style={[styles.pill, { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.card }]}>
-                <Ionicons name="calendar-outline" size={12} color={active ? "#fff" : colors.mutedForeground} />
-                <Text style={[styles.pillText, { color: active ? "#fff" : colors.mutedForeground }]}>{c.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
-          {TYPE_CHIPS.map((c) => {
-            const active = type === c.key;
-            return (
-              <Pressable key={c.key} onPress={() => setType(c.key)} style={[styles.pill, { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.card }]}>
-                {c.icon ? <Ionicons name={c.icon} size={12} color={active ? "#fff" : colors.mutedForeground} /> : null}
-                <Text style={[styles.pillText, { color: active ? "#fff" : colors.mutedForeground }]}>{c.label}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          {activeChips.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+              {activeChips.map((c) => (
+                <Pressable
+                  key={c.key}
+                  onPress={c.onClear}
+                  style={[styles.activeChip, { backgroundColor: colors.primary }]}
+                  accessibilityLabel={`Clear ${c.key} filter`}
+                >
+                  <Text style={styles.activeChipText}>{c.label}</Text>
+                  <Ionicons name="close" size={12} color="#fff" />
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
       </View>
+
+      <FilterSheet
+        visible={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        status={status}
+        type={type}
+        dateRange={dateRange}
+        onApply={(next) => {
+          setStatus(next.status);
+          setType(next.type);
+          setDateRange(next.dateRange);
+          setFilterSheetOpen(false);
+        }}
+        onReset={() => {
+          setStatus("all");
+          setType("all");
+          setDateRange("today");
+        }}
+      />
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
@@ -273,6 +299,27 @@ const styles = StyleSheet.create({
   pills: { gap: 8, paddingVertical: 2, paddingRight: 8 },
   pill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
   pillText: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "capitalize" },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  filterBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, height: 36, borderRadius: 10, borderWidth: 1 },
+  filterBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  filterBadge: { minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  filterBadgeText: { color: "#fff", fontSize: 11, fontFamily: "Inter_700Bold" },
+  chipsRow: { gap: 6, paddingRight: 8, alignItems: "center" },
+  activeChip: { flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 10, paddingRight: 6, height: 28, borderRadius: 999 },
+  activeChipText: { color: "#fff", fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 16, maxHeight: "85%" },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 8, marginBottom: 8 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 },
+  sheetTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  sheetSection: { paddingVertical: 12, borderTopWidth: 1 },
+  sheetSectionTitle: { fontSize: 12, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 },
+  sheetChipsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  sheetFooter: { flexDirection: "row", gap: 10, paddingTop: 14, paddingBottom: 4 },
+  sheetResetBtn: { flex: 1, alignItems: "center", justifyContent: "center", height: 46, borderRadius: 12, borderWidth: 1 },
+  sheetResetText: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  sheetApplyBtn: { flex: 2, alignItems: "center", justifyContent: "center", height: 46, borderRadius: 12 },
+  sheetApplyText: { color: "#fff", fontSize: 14, fontFamily: "Inter_700Bold" },
   list: { padding: 16 },
   actionRow: { flexDirection: "row", gap: 8, marginTop: 6 },
   rejectBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1 },
@@ -280,3 +327,104 @@ const styles = StyleSheet.create({
   acceptBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: 8, borderRadius: 10 },
   acceptText: { color: "#fff", fontSize: 13, fontFamily: "Inter_700Bold" },
 });
+
+interface FilterSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  status: StatusFilter;
+  type: TypeFilter;
+  dateRange: DateFilter;
+  onApply: (next: { status: StatusFilter; type: TypeFilter; dateRange: DateFilter }) => void;
+  onReset: () => void;
+}
+
+function FilterSheet({ visible, onClose, status, type, dateRange, onApply, onReset }: FilterSheetProps) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const [draftStatus, setDraftStatus] = useState<StatusFilter>(status);
+  const [draftType, setDraftType] = useState<TypeFilter>(type);
+  const [draftDate, setDraftDate] = useState<DateFilter>(dateRange);
+
+  React.useEffect(() => {
+    if (visible) {
+      setDraftStatus(status);
+      setDraftType(type);
+      setDraftDate(dateRange);
+    }
+  }, [visible, status, type, dateRange]);
+
+  const renderChip = <T extends string>(active: boolean, label: string, onPress: () => void, key: T) => (
+    <Pressable
+      key={key}
+      onPress={onPress}
+      style={[
+        styles.pill,
+        { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary : colors.card },
+      ]}
+    >
+      <Text style={[styles.pillText, { color: active ? "#fff" : colors.foreground }]}>{label}</Text>
+    </Pressable>
+  );
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable
+          style={[styles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 12 }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={styles.sheetHeader}>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Filters</Text>
+            <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close filters">
+              <Ionicons name="close" size={22} color={colors.mutedForeground} />
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={[styles.sheetSection, { borderTopColor: colors.border }]}>
+              <Text style={[styles.sheetSectionTitle, { color: colors.mutedForeground }]}>Date range</Text>
+              <View style={styles.sheetChipsGrid}>
+                {DATE_CHIPS.map((c) => renderChip(draftDate === c.key, c.label, () => setDraftDate(c.key), c.key))}
+              </View>
+            </View>
+
+            <View style={[styles.sheetSection, { borderTopColor: colors.border }]}>
+              <Text style={[styles.sheetSectionTitle, { color: colors.mutedForeground }]}>Status</Text>
+              <View style={styles.sheetChipsGrid}>
+                {STATUS_CHIPS.map((c) => renderChip(draftStatus === c.key, c.label, () => setDraftStatus(c.key), c.key))}
+              </View>
+            </View>
+
+            <View style={[styles.sheetSection, { borderTopColor: colors.border }]}>
+              <Text style={[styles.sheetSectionTitle, { color: colors.mutedForeground }]}>Order type</Text>
+              <View style={styles.sheetChipsGrid}>
+                {TYPE_CHIPS.map((c) => renderChip(draftType === c.key, c.label, () => setDraftType(c.key), c.key))}
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.sheetFooter}>
+            <Pressable
+              onPress={() => {
+                setDraftStatus("all");
+                setDraftType("all");
+                setDraftDate("today");
+                onReset();
+              }}
+              style={[styles.sheetResetBtn, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.sheetResetText, { color: colors.foreground }]}>Reset</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => onApply({ status: draftStatus, type: draftType, dateRange: draftDate })}
+              style={[styles.sheetApplyBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text style={styles.sheetApplyText}>Apply filters</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}

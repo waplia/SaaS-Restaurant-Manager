@@ -4,7 +4,11 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useOrders, useFloorTables, useMenuItems, useMenuCategories, useMenus, useCreateOrder, useCurbsideQueue, useCurbsideHandover, useCurbsideReport, useGuestVerifications } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle, Car } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { Plus, CheckCircle, Clock, ChefHat, XCircle, AlertTriangle, Car, Calendar as CalendarIcon, ChevronDown, Search, X } from "lucide-react";
+import type { DateRange as RDPDateRange } from "react-day-picker";
 import { OrderDetailDrawer } from "@/components/OrderDetailDrawer";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -300,36 +304,129 @@ function CurbsideTab() {
   );
 }
 
-type DateRange = "today" | "7d" | "30d" | "all";
+type DateRange = { from?: Date; to?: Date };
+type DatePreset = "today" | "yesterday" | "7d" | "30d" | "this_month" | "last_month" | "all";
 
-function sinceIsoFor(d: DateRange): string | undefined {
-  if (d === "all") return undefined;
+const DATE_PRESETS: { key: DatePreset; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7d", label: "Last 7 days" },
+  { key: "30d", label: "Last 30 days" },
+  { key: "this_month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "all", label: "All time" },
+];
+
+function rangeForPreset(p: DatePreset): DateRange {
   const now = new Date();
-  if (d === "today") {
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const sod = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const eod = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  if (p === "today") return { from: sod(now), to: eod(now) };
+  if (p === "yesterday") { const y = new Date(now); y.setDate(now.getDate() - 1); return { from: sod(y), to: eod(y) }; }
+  if (p === "7d") return { from: sod(new Date(now.getTime() - 6 * 86400000)), to: eod(now) };
+  if (p === "30d") return { from: sod(new Date(now.getTime() - 29 * 86400000)), to: eod(now) };
+  if (p === "this_month") return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: eod(now) };
+  if (p === "last_month") {
+    return { from: new Date(now.getFullYear(), now.getMonth() - 1, 1), to: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999) };
   }
-  const days = d === "7d" ? 7 : 30;
-  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
+  return {};
 }
+
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatRangeLabel(r: DateRange): string {
+  if (!r.from && !r.to) return "All time";
+  const today = new Date();
+  if (r.from && r.to) {
+    if (sameDay(r.from, r.to)) {
+      if (sameDay(r.from, today)) return "Today";
+      const y = new Date(); y.setDate(today.getDate() - 1);
+      if (sameDay(r.from, y)) return "Yesterday";
+      return format(r.from, "MMM d, yyyy");
+    }
+    return `${format(r.from, "MMM d")} – ${format(r.to, "MMM d, yyyy")}`;
+  }
+  if (r.from) return `From ${format(r.from, "MMM d, yyyy")}`;
+  return `Until ${format(r.to!, "MMM d, yyyy")}`;
+}
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "All statuses" },
+  { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "preparing", label: "Preparing" },
+  { value: "ready", label: "Ready" },
+  { value: "out_for_delivery", label: "Out for delivery" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+const TYPE_OPTIONS = [
+  { value: "all", label: "All types" },
+  { value: "dine_in", label: "Dine-in" },
+  { value: "takeaway", label: "Takeaway" },
+  { value: "delivery", label: "Delivery" },
+  { value: "curbside", label: "Curbside" },
+];
+const PAYMENT_OPTIONS = [
+  { value: "all", label: "All payments" },
+  { value: "paid", label: "Paid" },
+  { value: "unpaid", label: "Unpaid" },
+  { value: "refunded", label: "Refunded" },
+];
 
 export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<DateRange>("today");
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateRange>(() => rangeForPreset("today"));
+  const [datePopOpen, setDatePopOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const trimmed = searchInput.trim();
+      setSearch(trimmed.length >= 2 ? trimmed : "");
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [openOrderId, setOpenOrderId] = useState<number | null>(null);
   const [tab, setTab] = useState<"all" | "curbside">("all");
   const { data: ordersData } = useOrders({
     status: statusFilter !== "all" ? statusFilter : undefined,
     orderType: orderTypeFilter !== "all" ? orderTypeFilter : undefined,
-    since: sinceIsoFor(dateRange),
+    paymentStatus: paymentFilter !== "all" ? paymentFilter : undefined,
+    since: dateRange.from?.toISOString(),
+    until: dateRange.to?.toISOString(),
+    search: search || undefined,
   });
   const { data: heldVerifications = [] } = useGuestVerifications();
   const heldOrderIds = useMemo(() => new Set(heldVerifications.map(v => v.orderId)), [heldVerifications]);
 
   const orders: Order[] = ordersData?.data ?? [];
 
-  const statuses = ["all", "pending", "confirmed", "preparing", "ready", "out_for_delivery", "completed", "cancelled"];
+  const resetFilters = () => {
+    setStatusFilter("all");
+    setOrderTypeFilter("all");
+    setPaymentFilter("all");
+    setDateRange(rangeForPreset("today"));
+    setSearchInput("");
+  };
+
+  const defaultRange = rangeForPreset("today");
+  const dateIsDefault = !!dateRange.from && !!dateRange.to
+    && sameDay(dateRange.from, defaultRange.from!) && sameDay(dateRange.to, defaultRange.to!);
+  const hasActiveFilters = statusFilter !== "all" || orderTypeFilter !== "all" || paymentFilter !== "all" || !dateIsDefault || search.length > 0;
+
+  const chips: { key: string; label: string; onClear: () => void }[] = [];
+  if (!dateIsDefault) chips.push({ key: "date", label: `Date: ${formatRangeLabel(dateRange)}`, onClear: () => setDateRange(rangeForPreset("today")) });
+  if (statusFilter !== "all") chips.push({ key: "status", label: `Status: ${STATUS_OPTIONS.find(o => o.value === statusFilter)?.label ?? statusFilter}`, onClear: () => setStatusFilter("all") });
+  if (orderTypeFilter !== "all") chips.push({ key: "type", label: `Type: ${TYPE_OPTIONS.find(o => o.value === orderTypeFilter)?.label ?? orderTypeFilter}`, onClear: () => setOrderTypeFilter("all") });
+  if (paymentFilter !== "all") chips.push({ key: "payment", label: `Payment: ${PAYMENT_OPTIONS.find(o => o.value === paymentFilter)?.label ?? paymentFilter}`, onClear: () => setPaymentFilter("all") });
+  if (search.length > 0) chips.push({ key: "search", label: `Search: "${search}"`, onClear: () => setSearchInput("") });
 
   return (
     <Layout>
@@ -356,36 +453,105 @@ export default function OrdersPage() {
           <CurbsideTab />
         ) : (
           <>
-            <div className="flex flex-col gap-2 mb-6">
-              <div className="flex gap-2 flex-wrap items-center">
-                <span className="text-xs font-medium text-muted-foreground w-16">Status</span>
-                {statuses.map(s => (
-                  <Button key={s} size="sm" variant={statusFilter === s ? "default" : "outline"} onClick={() => setStatusFilter(s)} className="capitalize">
-                    {s}
+            <div className="flex flex-col gap-3 mb-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <Popover open={datePopOpen} onOpenChange={setDatePopOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2 h-9">
+                      <CalendarIcon className="w-4 h-4" />
+                      <span className="font-medium">{formatRangeLabel(dateRange)}</span>
+                      <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <div className="flex flex-col sm:flex-row">
+                      <div className="flex flex-row sm:flex-col gap-1 p-2 border-b sm:border-b-0 sm:border-r border-border sm:min-w-[140px] overflow-x-auto">
+                        {DATE_PRESETS.map(p => {
+                          const presetRange = rangeForPreset(p.key);
+                          const active = (p.key === "all" && !dateRange.from && !dateRange.to)
+                            || (presetRange.from && presetRange.to && dateRange.from && dateRange.to
+                                && sameDay(presetRange.from, dateRange.from) && sameDay(presetRange.to, dateRange.to));
+                          return (
+                            <button
+                              key={p.key}
+                              onClick={() => { setDateRange(rangeForPreset(p.key)); setDatePopOpen(false); }}
+                              className={cn(
+                                "text-left text-sm px-3 py-1.5 rounded whitespace-nowrap transition-colors",
+                                active ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+                              )}
+                            >
+                              {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="p-2">
+                        <Calendar
+                          mode="range"
+                          selected={{ from: dateRange.from, to: dateRange.to } as RDPDateRange}
+                          onSelect={(r) => setDateRange({ from: r?.from, to: r?.to ?? r?.from })}
+                          numberOfMonths={2}
+                        />
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
+                <Select value={orderTypeFilter} onValueChange={setOrderTypeFilter}>
+                  <SelectTrigger className="h-9 w-[140px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
+                <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                  <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
+                <div className="relative ml-auto">
+                  <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    placeholder="Search order # or customer"
+                    className="h-9 pl-8 w-64"
+                  />
+                </div>
+
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="text-muted-foreground">
+                    Clear filters
                   </Button>
-                ))}
+                )}
               </div>
-              <div className="flex gap-2 flex-wrap items-center">
-                <span className="text-xs font-medium text-muted-foreground w-16">Type</span>
-                {(["all", "dine_in", "takeaway", "delivery", "curbside"] as const).map(t => (
-                  <Button key={t} size="sm" variant={orderTypeFilter === t ? "default" : "outline"} onClick={() => setOrderTypeFilter(t)} className="capitalize">
-                    {t.replace("_", " ")}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex gap-2 flex-wrap items-center">
-                <span className="text-xs font-medium text-muted-foreground w-16">Date</span>
-                {([
-                  { k: "today" as const, l: "Today" },
-                  { k: "7d" as const, l: "Last 7 days" },
-                  { k: "30d" as const, l: "Last 30 days" },
-                  { k: "all" as const, l: "All time" },
-                ]).map(d => (
-                  <Button key={d.k} size="sm" variant={dateRange === d.k ? "default" : "outline"} onClick={() => setDateRange(d.k)}>
-                    {d.l}
-                  </Button>
-                ))}
-              </div>
+
+              {chips.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {chips.map(c => (
+                    <span key={c.key} className="inline-flex items-center gap-1.5 text-xs bg-secondary text-secondary-foreground rounded-full pl-2.5 pr-1 py-1">
+                      <span className="font-medium">{c.label}</span>
+                      <button
+                        type="button"
+                        onClick={c.onClear}
+                        className="w-4 h-4 rounded-full hover:bg-muted-foreground/20 flex items-center justify-center"
+                        aria-label={`Clear ${c.key} filter`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {orders.map((order: Order) => (
