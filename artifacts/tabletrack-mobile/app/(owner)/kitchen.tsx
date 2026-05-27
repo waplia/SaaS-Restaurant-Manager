@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, SectionList, FlatList, Pressable, ScrollView, R
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUpdateKitchenTicketStatus, customFetch } from "@workspace/api-client-react";
+import { useUpdateKitchenTicketStatus, customFetch, getListFloorTablesQueryKey } from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
@@ -327,7 +327,13 @@ function KdsView() {
         body: JSON.stringify({ status: "cancelled", reason }),
         headers: { "content-type": "application/json" },
       });
+      // Cancelling a KOT removes items from the kitchen queue AND voids them
+      // on the parent order — the orders list, floor map, and any waiter
+      // running-order screen all need to re-fetch, not just the KDS feed.
       qc.invalidateQueries({ queryKey: ticketsQ.queryKey });
+      qc.invalidateQueries({ queryKey: ["orders", restaurantId] });
+      qc.invalidateQueries({ queryKey: getListFloorTablesQueryKey(restaurantId) });
+      qc.invalidateQueries({ queryKey: ["running-order"] });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       setCancelTarget(null);
     } finally {

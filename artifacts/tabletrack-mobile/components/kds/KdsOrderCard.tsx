@@ -136,8 +136,11 @@ function KdsOrderCardImpl({ ticket, itemChecks, onCycleItem, onPrimaryAction, on
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.titleRow}>
             <Text style={[styles.orderNum, { color: ticket.isDelayed ? "#7f1d1d" : colors.foreground }]}>
-              #{ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}
+              Order #{ticket.orderDisplayNumber ?? ticket.orderNumber ?? ticket.id}
             </Text>
+            <View style={[styles.pill, { backgroundColor: stMeta.color + "22", borderColor: stMeta.color, borderWidth: 1 }]}>
+              <Text style={[styles.pillText, { color: stMeta.color }]}>KOT #{ticket.id}</Text>
+            </View>
             {ticket.isPriority ? <Ionicons name="flag" size={14} color="#f97316" /> : null}
             <View style={[styles.pill, { backgroundColor: otMeta.color + "22" }]}>
               <Text style={[styles.pillText, { color: otMeta.color }]}>{otMeta.label}</Text>

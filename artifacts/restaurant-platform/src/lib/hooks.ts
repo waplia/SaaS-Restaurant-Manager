@@ -513,6 +513,17 @@ export function useUpdateTicketStatus() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["kitchen"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      // A kitchen ticket transition (ready/served/preparing) also mutates
+      // the parent order's item statuses (cascade in PATCH ticket/:id/status)
+      // and is what the floor map / orders list / running-order screens
+      // render to show "Ready to serve". Invalidate those keys too so a
+      // waiter watching the table layout sees the badge flip immediately
+      // instead of waiting for the next 20s poll.
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["tables"] });
+      qc.invalidateQueries({ queryKey: ["table-sessions"] });
+      qc.invalidateQueries({ queryKey: ["running-order"] });
+      qc.invalidateQueries({ queryKey: ["active-order"] });
       const label = vars.status === "ready" ? "Marked ready" : vars.status === "served" ? "Marked served" : `Status: ${vars.status}`;
       notify({ title: label });
     },

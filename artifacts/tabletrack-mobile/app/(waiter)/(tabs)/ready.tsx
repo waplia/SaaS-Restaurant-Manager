@@ -18,6 +18,7 @@ import {
 import { Alert } from "@/components/ui/AppAlert";
 import { useRunningOrdersSummary, useSetItemKitchenStatus } from "@/hooks/useRunningOrder";
 import { usePermission } from "@/hooks/usePermission";
+import { useWaiterRealtime } from "@/hooks/useWaiterRealtime";
 
 /**
  * Task #637 — "Ready" queue tab. Lists every running-order item the
@@ -35,6 +36,9 @@ export default function ReadyQueueScreen() {
   const qc = useQueryClient();
   const canMarkServed = usePermission("waiter.mark_served");
   const markStatus = useSetItemKitchenStatus();
+  // Subscribe to kitchen ticket + per-item realtime events so partial-ready
+  // rounds appear immediately instead of waiting for the 20s poll.
+  useWaiterRealtime(restaurantId);
 
   const tablesQ = useQuery({
     queryKey: getListFloorTablesQueryKey(restaurantId),
