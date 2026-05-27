@@ -1,0 +1,551 @@
+Use this updated prompt with the **Owner/Manager part removed**:
+
+```text
+Redesign KhanaLagao Business mobile app with role-based dashboards and role-specific flows.
+
+Current requirement:
+The mobile app should not show the same interface to every user. Each staff type should see only the features they need. Design separate mobile home screens and flows for waiter, chef/kitchen, cashier, inventory staff, delivery staff, marketing staff, and accountant users.
+
+Important:
+- Do not create mock data.
+- Use real backend data.
+- Role-based UI must respect permissions.
+- No raw ID fields.
+- No dead buttons.
+- No infinite loading.
+- Mobile app should be fast, simple, touch-friendly, and easy for restaurant staff.
+- Each role should have a different home screen based on daily work.
+
+====================================================
+1. ROLE-BASED APP ENTRY FLOW
+====================================================
+
+After login:
+1. Detect user role.
+2. Detect assigned outlet.
+3. Detect assigned permissions.
+4. Redirect to role-based home screen.
+
+Roles:
+- Waiter
+- Chef / Kitchen Staff
+- Cashier
+- Inventory Staff
+- Delivery Staff
+- Marketing Staff
+- Accountant
+- Support / Admin
+
+If user has multiple roles:
+Show role switcher:
+“Continue as Waiter / Cashier / Kitchen / Inventory”
+
+If user has multiple outlets:
+Show outlet switcher.
+
+====================================================
+2. WAITER MOBILE APP UI
+====================================================
+
+Purpose:
+Fast table service.
+
+Waiter home should show:
+- Assigned tables
+- Active tables
+- New table requests
+- Pending KOT status
+- Orders ready to serve
+- Bill requested tables
+
+Main screens:
+
+A. Table View
+- Visual table cards
+- Table status:
+  Free
+  Occupied
+  Ordered
+  Preparing
+  Ready
+  Bill Requested
+  Paid
+- Show table number
+- Guest count
+- Running amount
+- Time since order
+- Assigned waiter
+
+B. Table Detail
+- Current order
+- Add item
+- Voice order
+- Customer note
+- Send KOT
+- Request bill
+- Mark served
+- Call manager
+
+C. Add Order Flow
+- Select table
+- Search item
+- Category grid
+- Add modifiers/add-ons
+- Add note
+- Send to kitchen
+
+D. Service Alerts
+- Table calling waiter
+- Order ready
+- Customer asked for bill
+- Kitchen delay
+- Payment pending
+
+Waiter bottom navigation:
+Tables
+New Order
+Ready
+Requests
+More
+
+Waiter quick buttons:
+- Add Item
+- Voice Order
+- Send KOT
+- Request Bill
+- Mark Served
+
+Design style:
+- Big table cards
+- Color-coded status
+- One-hand usable
+- Minimal reports
+- No unnecessary admin features
+
+====================================================
+3. CHEF / KITCHEN MOBILE APP UI
+====================================================
+
+Purpose:
+Kitchen order preparation.
+
+Chef home should show:
+- New KOTs
+- Preparing orders
+- Delayed orders
+- Ready orders
+- Station filter
+
+Main screens:
+
+A. Kitchen Board
+Tabs:
+- New
+- Preparing
+- Ready
+- Delayed
+- Completed
+
+Each KOT card shows:
+- KOT number
+- Table/order type
+- Time elapsed
+- Priority
+- Items
+- Quantity
+- Modifiers
+- Special notes
+- Station
+- Waiter name
+
+Actions:
+- Accept
+- Start Cooking
+- Mark Item Ready
+- Mark Full KOT Ready
+- Delay Reason
+- Print/Reprint KOT if allowed
+
+B. Item-Level Preparation
+For each item:
+- Pending
+- Preparing
+- Ready
+- Cancelled/Unavailable
+
+C. Kitchen Alerts
+- New KOT sound
+- Delayed order warning
+- Cancelled item alert
+- Item unavailable alert
+
+Chef bottom navigation:
+KOTs
+Preparing
+Ready
+Alerts
+More
+
+Design style:
+- Large readable text
+- Dark kitchen mode
+- Timer badges
+- Big action buttons
+- Color-coded cards
+- No billing/payment clutter
+
+====================================================
+4. CASHIER MOBILE APP UI
+====================================================
+
+Purpose:
+Billing, payment, counter orders.
+
+Cashier home should show:
+- Active bills
+- Pending payments
+- Held bills
+- Today counter sales
+- Shift status
+- Printer/payment status
+
+Main screens:
+
+A. Counter POS
+- New order
+- Search item
+- Cart
+- Apply discount if allowed
+- Payment
+- Print/share invoice
+
+B. Billing Queue
+- Tables requesting bill
+- QR orders pending payment
+- Takeaway pending payment
+- Delivery pending payment
+
+C. Payment Screen
+- Cash
+- UPI
+- Card
+- PhonePe EDC
+- Dynamic QR
+- Split payment
+- Pay later
+- Cash received/change return calculator
+
+D. Shift
+- Open shift
+- Cash in/out
+- Close shift
+- Payment summary
+- Cash mismatch reason
+- Print shift report
+
+Cashier bottom navigation:
+POS
+Bills
+Payments
+Shift
+More
+
+Design style:
+- Calculator-style payment UI
+- Fast billing buttons
+- Big total amount
+- Printer status visible
+- Payment verification states
+
+====================================================
+5. INVENTORY STAFF MOBILE APP UI
+====================================================
+
+Purpose:
+Stock operations.
+
+Inventory home should show:
+- Low stock
+- Out of stock
+- Purchase orders
+- Stock receiving
+- Wastage alerts
+- Transfers
+
+Main screens:
+
+A. Stock List
+- Search item
+- Current stock
+- Minimum stock
+- Unit
+- Status
+
+B. Quick Stock Actions
+- Stock In
+- Stock Out
+- Stock Adjustment
+- Wastage
+- Transfer
+- Receive Purchase Order
+
+C. Scan / Upload
+- Barcode scan
+- Invoice photo upload
+- Vendor bill OCR if enabled
+
+D. Low Stock Alerts
+- Reorder suggestion
+- Create purchase order
+- Mark resolved
+
+Inventory bottom navigation:
+Stock
+Scan
+Receive
+Alerts
+More
+
+Design style:
+- Warehouse style cards
+- Scan button prominent
+- Fast stock update forms
+- No billing UI
+
+====================================================
+6. DELIVERY STAFF MOBILE APP UI
+====================================================
+
+Purpose:
+Delivery assignment and proof.
+
+Delivery home should show:
+- Assigned deliveries
+- Pickup pending
+- Out for delivery
+- Delivered today
+- Cash collection
+
+Main screens:
+
+A. Delivery List
+- Order number
+- Customer name
+- Address
+- Payment status
+- COD amount
+- ETA
+- Call customer
+- Open maps
+
+B. Delivery Detail
+- Pickup order
+- Start delivery
+- Mark delivered
+- Collect cash
+- Upload proof photo
+- Customer unavailable reason
+
+C. Cash Handover
+- Total COD collected
+- Handover to cashier
+- Cash mismatch reason
+
+Delivery bottom navigation:
+Assigned
+Map
+Cash
+History
+More
+
+Design style:
+- Simple delivery cards
+- Big call/map buttons
+- Status timeline
+
+====================================================
+7. MARKETING STAFF MOBILE APP UI
+====================================================
+
+Purpose:
+Campaign monitoring and quick campaigns.
+
+Marketing home should show:
+- Active campaigns
+- Pending approvals
+- Customer segments
+- Coupons used
+- Reviews/feedback
+
+Main screens:
+- Quick offer creator
+- WhatsApp campaign draft
+- SMS/email/push campaign if enabled
+- Review reply suggestions
+- Customer segment list
+- Campaign analytics
+
+Bottom navigation:
+Campaigns
+Customers
+Reviews
+Templates
+More
+
+Design style:
+- Campaign cards
+- Preview message
+- Approval status
+- Send test button
+
+====================================================
+8. ACCOUNTANT MOBILE APP UI
+====================================================
+
+Purpose:
+Payments, expenses, settlement, reports.
+
+Accountant home should show:
+- Today collections
+- Pending settlements
+- Expenses pending
+- Refunds
+- Vendor dues
+- Invoices
+
+Main screens:
+- Payment reports
+- Expense approvals
+- Vendor payments
+- Settlement reconciliation
+- Invoice list
+- Refund approvals
+- P&L snapshot
+
+Bottom navigation:
+Finance
+Expenses
+Invoices
+Reports
+More
+
+====================================================
+9. COMMON MOBILE FEATURES FOR ALL ROLES
+====================================================
+
+Every role should have:
+- Profile
+- Outlet switcher if allowed
+- Notifications
+- Help/support
+- App settings
+- Logout
+- Role switch if multiple roles
+- Offline/online status
+- Pull to refresh
+- Empty states
+- Error states
+
+Common UI components:
+- Role-based home cards
+- Quick action buttons
+- Bottom navigation
+- Floating primary action button
+- Search
+- Filters
+- Status chips
+- Swipe actions
+- Confirmation modals
+
+====================================================
+10. NOTIFICATION RULES BY ROLE
+====================================================
+
+Waiter:
+- Table request
+- KOT ready
+- Bill requested
+- Customer call
+- Order cancelled
+
+Chef:
+- New KOT
+- Item cancelled
+- Delayed order
+- Priority order
+
+Cashier:
+- Payment received
+- Bill requested
+- QR order payment
+- Failed payment
+- Printer error
+
+Inventory:
+- Low stock
+- Stock received
+- Vendor invoice
+- Wastage alert
+
+Delivery:
+- New delivery assigned
+- Customer changed address
+- COD pending
+
+Marketing:
+- Campaign approval
+- Campaign completed
+- Review alert
+- Coupon usage
+
+Accountant:
+- Payment settlement
+- Refund approval
+- Expense approval
+- Invoice due
+
+====================================================
+11. DESIGN STYLE
+====================================================
+
+Mobile app should be:
+- Modern
+- Fast
+- Role-focused
+- Large buttons
+- Easy for non-technical staff
+- Minimal typing
+- Swipe actions
+- Bottom sheets
+- Status colors
+- Clear empty states
+- No long admin-style menus
+
+Color ideas:
+- Waiter: Blue / Green
+- Kitchen: Dark / Amber
+- Cashier: Orange / Green
+- Inventory: Purple / Blue
+- Delivery: Green / Black
+- Marketing: Pink / Purple
+- Accountant: Navy / Green
+
+====================================================
+12. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Each role gets a different mobile home screen.
+- Waiter app has table/service flow.
+- Kitchen app has KOT board flow.
+- Cashier app has billing/payment/shift flow.
+- Inventory app has stock/scan flow.
+- Delivery app has assigned delivery flow.
+- Marketing and accountant screens show only relevant modules.
+- Permissions control every screen and action.
+- Notifications are role-based.
+- No mock data.
+- No dead buttons.
+- No raw IDs.
+- App remains fast and mobile-friendly.
+```
