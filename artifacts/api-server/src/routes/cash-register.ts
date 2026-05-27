@@ -504,17 +504,36 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/movements",
       return void res.status(400).json({ error: "amount must be a positive number" });
     }
 
+    // Money-leaving-the-drawer types must include a reason (audit trail) and
+    // are blocked when the drawer doesn't have enough cash. The check runs
+    // inside the FOR UPDATE transaction below so concurrent cash-outs can't
+    // race past the expected-cash balance.
+    const isOutType = type === "cash_out" || type === "drop" || type === "payout";
+    if (isOutType && (!reason || String(reason).trim().length < 3)) {
+      return void res.status(400).json({ error: "A reason (min 3 chars) is required for cash leaving the drawer" });
+    }
+
     try {
       const row = await db.transaction(async tx => {
         const lockRows = await tx.execute(sql`
-          SELECT status FROM ${cashRegisterSessionsTable}
+          SELECT status, opening_float AS "openingFloat"
+          FROM ${cashRegisterSessionsTable}
           WHERE ${cashRegisterSessionsTable.id} = ${sessionId}
             AND ${cashRegisterSessionsTable.restaurantId} = ${restaurantId}
           FOR UPDATE
         `);
-        const s = (lockRows as unknown as { rows: Array<{ status: string }> }).rows[0];
+        const s = (lockRows as unknown as { rows: Array<{ status: string; openingFloat: string }> }).rows[0];
         if (!s) throw new Error("NOT_FOUND");
         if (s.status !== "open") throw new Error("NOT_OPEN");
+
+        if (isOutType) {
+          const totals = await computeSessionTotals(tx, sessionId, restaurantId, Number(s.openingFloat));
+          if (amountNum > totals.expectedCash + 0.001) {
+            const err = new Error("INSUFFICIENT_CASH") as Error & { available: number };
+            err.available = totals.expectedCash;
+            throw err;
+          }
+        }
 
         const [r] = await tx.insert(cashMovementsTable).values({
           sessionId,
@@ -533,6 +552,13 @@ router.post("/restaurants/:restaurantId/cash-register/sessions/:id/movements",
       const msg = (e as Error).message;
       if (msg === "NOT_FOUND") return void res.status(404).json({ error: "Session not found" });
       if (msg === "NOT_OPEN") return void res.status(400).json({ error: "Cannot record movements on a closed session" });
+      if (msg === "INSUFFICIENT_CASH") {
+        const available = (e as Error & { available: number }).available;
+        return void res.status(400).json({
+          error: `Not enough cash in the drawer (only ${available.toFixed(2)} available)`,
+          available,
+        });
+      }
       throw e;
     }
   },

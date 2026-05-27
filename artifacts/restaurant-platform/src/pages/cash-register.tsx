@@ -432,21 +432,42 @@ function CloseRegisterModal({ sessionId, expectedCash, onClose }: {
   );
 }
 
-function MovementModal({ sessionId, onClose }: { sessionId: number; onClose: () => void }) {
+function MovementModal({ sessionId, expectedCash, onClose }: { sessionId: number; expectedCash: number; onClose: () => void }) {
   const { toast } = useToast();
   const recordMut = useRecordCashMovement();
   const [type, setType] = useState<"cash_in" | "cash_out" | "drop" | "payout">("cash_in");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
 
+  const amt = Number(amount);
+  const amtValid = isFinite(amt) && amt > 0;
+  const isOutType = type === "cash_out" || type === "drop" || type === "payout";
+  // Freeze cash-out: block any out-type movement that would push the drawer
+  // negative. Server enforces the same check atomically inside the locked
+  // session transaction; this is the friendly UX layer on top.
+  const insufficient = amtValid && isOutType && amt > expectedCash + 0.001;
+  const reasonRequired = isOutType; // require reason for any money leaving the drawer
+  const reasonMissing = reasonRequired && reason.trim().length < 3;
+
   const handleSubmit = async () => {
-    const amt = Number(amount);
-    if (!isFinite(amt) || amt <= 0) {
+    if (!amtValid) {
       toast({ title: "Enter a valid amount", variant: "destructive" });
       return;
     }
+    if (insufficient) {
+      toast({
+        title: "Not enough cash in the drawer",
+        description: `Only ${fmt(expectedCash)} is available — can't ${movementLabels[type]} ${fmt(amt)}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (reasonMissing) {
+      toast({ title: "Reason required", description: "Please add a short reason (min 3 chars) for money leaving the drawer.", variant: "destructive" });
+      return;
+    }
     try {
-      await recordMut.mutateAsync({ sessionId, type, amount: amt, reason: reason || undefined });
+      await recordMut.mutateAsync({ sessionId, type, amount: amt, reason: reason.trim() || undefined });
       toast({ title: "Movement recorded", description: `${movementLabels[type]} — ${fmt(amt)}` });
       onClose();
     } catch (e) {
@@ -490,15 +511,25 @@ function MovementModal({ sessionId, onClose }: { sessionId: number; onClose: () 
           <div>
             <Label className="text-sm">Amount (₹)</Label>
             <Input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" />
+            {isOutType && (
+              <p className={cn("text-xs mt-1.5", insufficient ? "text-rose-600 dark:text-rose-400 font-medium" : "text-muted-foreground")}>
+                {insufficient
+                  ? `Insufficient cash — only ${fmt(expectedCash)} in drawer right now.`
+                  : `Available in drawer: ${fmt(expectedCash)}`}
+              </p>
+            )}
           </div>
           <div>
-            <Label className="text-sm">Reason</Label>
+            <Label className="text-sm">Reason{reasonRequired && <span className="text-rose-500 ml-0.5">*</span>}</Label>
             <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Tip received, supplier payout, change for ATM…" />
+            {reasonRequired && (
+              <p className="text-xs text-muted-foreground mt-1">Required for money leaving the drawer (audit trail).</p>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={recordMut.isPending}>
+          <Button onClick={handleSubmit} disabled={recordMut.isPending || !amtValid || insufficient || reasonMissing}>
             {recordMut.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Record
           </Button>
@@ -653,7 +684,12 @@ export default function CashRegisterPage() {
   const session = current?.session ?? null;
   const totals = current?.totals ?? null;
 
-  const { data: detail } = useCashRegisterSession(historyDetailId);
+  // Subscribe to detail for the active open session too, otherwise the
+  // "Movements (this session)" list stays empty and the cashier thinks the
+  // Record Movement button is broken. When the user clicks a historical
+  // session, that takes priority.
+  const liveDetailId = historyDetailId ?? session?.id ?? null;
+  const { data: detail } = useCashRegisterSession(liveDetailId);
   const reportSessionId = session?.id ?? historyDetailId;
   const effectiveReportKind: "x" | "z" = useMemo(() => {
     if (historyDetailId && detail?.session.status === "closed") return "z";
@@ -823,7 +859,11 @@ export default function CashRegisterPage() {
         <CloseRegisterModal sessionId={session.id} expectedCash={totals.expectedCash} onClose={() => setShowClose(false)} />
       )}
       {showMovement && session && (
-        <MovementModal sessionId={session.id} onClose={() => setShowMovement(false)} />
+        <MovementModal
+          sessionId={session.id}
+          expectedCash={totals?.expectedCash ?? 0}
+          onClose={() => setShowMovement(false)}
+        />
       )}
     </div>
   );
