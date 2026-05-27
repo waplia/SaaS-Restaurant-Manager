@@ -36,14 +36,14 @@ const router = Router();
 
 router.use(
   "/restaurants/:restaurantId/pnl",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "accountant", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("smart_pnl"),
 );
 
 router.use(
   "/tenants/:tenantId/pnl",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "accountant", "super_admin"),
   requirePlanFeature("smart_pnl"),
 );
 

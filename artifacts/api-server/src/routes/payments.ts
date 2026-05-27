@@ -65,12 +65,12 @@ const SettlePaymentBody = z.object({
 
 router.use(
   "/restaurants/:restaurantId/payments",
-  requireRole("owner", "manager", "waiter", "super_admin"),
+  requireRole("owner", "manager", "waiter", "accountant", "super_admin"),
   validateRestaurantAccess,
 );
 router.use(
   "/restaurants/:restaurantId/due-payments",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "accountant", "super_admin"),
   validateRestaurantAccess,
 );
 

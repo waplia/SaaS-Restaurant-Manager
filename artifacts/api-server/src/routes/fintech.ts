@@ -157,7 +157,7 @@ const topupSchema = z.object({
   idempotencyKey: z.string().min(8),
 });
 
-router.post("/restaurants/:restaurantId/wallets/:walletId/topup", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/wallets/:walletId/topup", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const parsed = topupSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
   const w = await wallet.getWalletById(Number(req.params.walletId));
@@ -181,7 +181,7 @@ const transferSchema = z.object({
   idempotencyKey: z.string().min(8),
 });
 
-router.post("/restaurants/:restaurantId/wallets/:walletId/transfer", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/wallets/:walletId/transfer", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const parsed = transferSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
   const from = await wallet.getWalletById(Number(req.params.walletId));
@@ -208,7 +208,7 @@ router.post("/restaurants/:restaurantId/wallets/:walletId/transfer", requireRole
 // :walletId path param actually belongs to that restaurant/tenant —
 // otherwise an owner could mutate another tenant's wallet by pairing
 // their own restaurantId with a foreign walletId (IDOR).
-router.post("/restaurants/:restaurantId/wallets/:walletId/adjust", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/wallets/:walletId/adjust", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({ deltaPaise: z.number().int(), reason: z.string().min(3), idempotencyKey: z.string().min(8) });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed", issues: parsed.error.issues }); return; }
@@ -230,7 +230,7 @@ router.post("/restaurants/:restaurantId/wallets/:walletId/adjust", requireRole("
   }
 });
 
-router.post("/restaurants/:restaurantId/wallets/:walletId/freeze", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/wallets/:walletId/freeze", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({ frozen: z.boolean(), reason: z.string().min(3) });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed" }); return; }
@@ -247,7 +247,7 @@ router.post("/restaurants/:restaurantId/wallets/:walletId/freeze", requireRole("
 
 // ─── Gateway / UPI payment records ──────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/fintech/gateway-payments", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/fintech/gateway-payments", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(gatewayPaymentRecordsTable)
     .where(and(eq(gatewayPaymentRecordsTable.tenantId, tid(req)), eq(gatewayPaymentRecordsTable.restaurantId, rid(req))))
     .orderBy(desc(gatewayPaymentRecordsTable.createdAt))
@@ -255,7 +255,7 @@ router.get("/restaurants/:restaurantId/fintech/gateway-payments", requireRole("o
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/fintech/gateway-payments", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/fintech/gateway-payments", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({
     gateway: z.enum(["razorpay", "cashfree", "stripe"]),
     gatewayOrderId: z.string().optional(),
@@ -342,14 +342,14 @@ router.post("/restaurants/:restaurantId/fintech/upi-payments", requireRole("owne
 
 // ─── Refunds ────────────────────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/refunds", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/refunds", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(refundsTable)
     .where(and(eq(refundsTable.tenantId, tid(req)), eq(refundsTable.restaurantId, rid(req))))
     .orderBy(desc(refundsTable.createdAt)).limit(200);
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/refunds", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/refunds", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({
     originalGatewayPaymentId: z.number().int().optional(),
     originalUpiPaymentId: z.number().int().optional(),
@@ -402,7 +402,7 @@ router.post("/restaurants/:restaurantId/refunds", requireRole("owner", "manager"
   res.json({ refund: row, walletTransactionId: walletTxId });
 });
 
-router.post("/restaurants/:restaurantId/refunds/:id/approve", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/refunds/:id/approve", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const [r] = await db.select().from(refundsTable).where(and(eq(refundsTable.id, id), eq(refundsTable.tenantId, tid(req))));
   if (!r) { res.status(404).json({ error: "not_found" }); return; }
@@ -414,7 +414,7 @@ router.post("/restaurants/:restaurantId/refunds/:id/approve", requireRole("owner
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/refunds/:id/mark-succeeded", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/refunds/:id/mark-succeeded", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const externalRefundId = (req.body?.externalRefundId as string | undefined) ?? null;
   const [r] = await db.select().from(refundsTable).where(and(eq(refundsTable.id, id), eq(refundsTable.tenantId, tid(req))));
@@ -433,13 +433,13 @@ router.post("/restaurants/:restaurantId/refunds/:id/mark-succeeded", requireRole
 
 // ─── Cashback rules ─────────────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/cashback-rules", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/cashback-rules", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(cashbackRulesTable)
     .where(and(eq(cashbackRulesTable.tenantId, tid(req)), eq(cashbackRulesTable.restaurantId, rid(req))));
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/cashback-rules", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/cashback-rules", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({
     name: z.string().min(2),
     percentBps: z.number().int().min(0).max(10000),
@@ -459,7 +459,7 @@ router.post("/restaurants/:restaurantId/cashback-rules", requireRole("owner", "m
   res.json(row);
 });
 
-router.patch("/restaurants/:restaurantId/cashback-rules/:id", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.patch("/restaurants/:restaurantId/cashback-rules/:id", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (typeof req.body?.isActive === "boolean") patch.isActive = req.body.isActive;
@@ -472,14 +472,14 @@ router.patch("/restaurants/:restaurantId/cashback-rules/:id", requireRole("owner
 
 // ─── Staff payouts ──────────────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/staff-payouts", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/staff-payouts", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(staffPayoutsTable)
     .where(and(eq(staffPayoutsTable.tenantId, tid(req)), eq(staffPayoutsTable.restaurantId, rid(req))))
     .orderBy(desc(staffPayoutsTable.createdAt)).limit(200);
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/staff-payouts", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/staff-payouts", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({
     staffUserId: z.number().int(),
     periodStart: z.string().datetime(),
@@ -520,7 +520,7 @@ router.post("/restaurants/:restaurantId/staff-payouts/:id/approve", requireRole(
   res.json(updated);
 });
 
-router.post("/restaurants/:restaurantId/staff-payouts/:id/pay", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/staff-payouts/:id/pay", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const [p] = await db.select().from(staffPayoutsTable).where(and(eq(staffPayoutsTable.id, id), eq(staffPayoutsTable.tenantId, tid(req))));
   if (!p) { res.status(404).json({ error: "not_found" }); return; }
@@ -557,14 +557,14 @@ router.get("/restaurants/:restaurantId/staff-payouts/me", async (req, res) => {
 
 // ─── Vendor payments ────────────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/vendor-payments", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/vendor-payments", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(vendorPaymentsTable)
     .where(and(eq(vendorPaymentsTable.tenantId, tid(req)), eq(vendorPaymentsTable.restaurantId, rid(req))))
     .orderBy(desc(vendorPaymentsTable.createdAt)).limit(200);
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/vendor-payments", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/vendor-payments", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({
     supplierId: z.number().int().optional(),
     billRef: z.string().optional(),
@@ -602,7 +602,7 @@ router.post("/restaurants/:restaurantId/vendor-payments", requireRole("owner", "
 
 // ─── Daily settlement ───────────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/settlements", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/settlements", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(dailySettlementsTable)
     .where(and(eq(dailySettlementsTable.tenantId, tid(req)), eq(dailySettlementsTable.restaurantId, rid(req))))
     .orderBy(desc(dailySettlementsTable.settlementDate)).limit(60);
@@ -679,14 +679,14 @@ async function generateSettlementForDay(tenantId: number, restaurantId: number, 
   }
 }
 
-router.post("/restaurants/:restaurantId/settlements/run", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/settlements/run", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const day = req.body?.date ? new Date(String(req.body.date)) : (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - 1); return d; })();
   const settlement = await generateSettlementForDay(tid(req), rid(req), day, uid(req));
   await recordAuditLog({ req, module: "fintech", action: "settlement_generated", entity: "daily_settlement", entityId: settlement.id, restaurantId: rid(req), newValue: { date: day.toISOString() } });
   res.json(settlement);
 });
 
-router.post("/restaurants/:restaurantId/settlements/:id/email", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/settlements/:id/email", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const [updated] = await db.update(dailySettlementsTable).set({ status: "emailed", emailedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(dailySettlementsTable.id, id), eq(dailySettlementsTable.tenantId, tid(req)))).returning();
@@ -695,14 +695,14 @@ router.post("/restaurants/:restaurantId/settlements/:id/email", requireRole("own
 
 // ─── Reconciliation ─────────────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/reconciliation/runs", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/reconciliation/runs", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(reconciliationRunsTable)
     .where(and(eq(reconciliationRunsTable.tenantId, tid(req)), eq(reconciliationRunsTable.restaurantId, rid(req))))
     .orderBy(desc(reconciliationRunsTable.createdAt)).limit(50);
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/reconciliation/runs", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/reconciliation/runs", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({
     source: z.enum(["razorpay", "cashfree", "stripe", "cash_shift", "csv"]),
     fromDate: z.string().datetime(),
@@ -769,7 +769,7 @@ router.post("/restaurants/:restaurantId/reconciliation/runs", requireRole("owner
   res.json({ run, variances: variances.length });
 });
 
-router.get("/restaurants/:restaurantId/reconciliation/runs/:id/variances", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/reconciliation/runs/:id/variances", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const rows = await db.select().from(reconciliationVariancesTable)
     .where(and(eq(reconciliationVariancesTable.runId, id), eq(reconciliationVariancesTable.tenantId, tid(req))))
@@ -777,7 +777,7 @@ router.get("/restaurants/:restaurantId/reconciliation/runs/:id/variances", requi
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/reconciliation/variances/:id/resolve", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/reconciliation/variances/:id/resolve", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const note = String(req.body?.note ?? "");
   const [updated] = await db.update(reconciliationVariancesTable).set({
@@ -818,7 +818,7 @@ router.post("/restaurants/:restaurantId/cash-shifts", requireRole("owner", "mana
 
 // ─── Capital placeholders ───────────────────────────────────────────────────
 
-router.get("/restaurants/:restaurantId/capital/credit-score", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/capital/credit-score", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   let [row] = await db.select().from(restaurantCreditScoresTable)
     .where(eq(restaurantCreditScoresTable.restaurantId, rid(req)));
   if (!row) {
@@ -869,7 +869,7 @@ router.post("/restaurants/:restaurantId/capital/sales-advance", requireRole("own
   res.json(row);
 });
 
-router.post("/restaurants/:restaurantId/insurance/interest", requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/insurance/interest", requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const schema = z.object({ offerId: z.number().int().optional(), contactName: z.string().optional(), contactPhone: z.string().optional(), contactEmail: z.string().optional(), notes: z.string().optional() });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "validation_failed" }); return; }
@@ -952,11 +952,11 @@ async function computeEligibility(restaurantId: number) {
   };
 }
 
-router.get("/restaurants/:restaurantId/capital/eligibility", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/capital/eligibility", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   res.json(await computeEligibility(rid(req)));
 });
 
-router.get("/restaurants/:restaurantId/capital/offers", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/capital/offers", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const elig = await computeEligibility(rid(req));
   const rows = await db.select({
     offer: capitalOffersTable,
@@ -971,7 +971,7 @@ router.get("/restaurants/:restaurantId/capital/offers", capitalGated(), requireR
   res.json({ eligibility: elig, offers: filtered });
 });
 
-router.get("/restaurants/:restaurantId/capital/applications", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/capital/applications", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const rows = await db.select().from(capitalApplicationsTable)
     .where(eq(capitalApplicationsTable.restaurantId, rid(req)))
     .orderBy(desc(capitalApplicationsTable.createdAt));
@@ -1030,7 +1030,7 @@ router.post("/restaurants/:restaurantId/capital/applications/:id/cancel", capita
   res.json(updated);
 });
 
-router.get("/restaurants/:restaurantId/capital/applications/:id/documents", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/capital/applications/:id/documents", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const rows = await db.select().from(capitalApplicationDocumentsTable)
     .where(and(eq(capitalApplicationDocumentsTable.applicationId, id), eq(capitalApplicationDocumentsTable.restaurantId, rid(req))))
@@ -1038,7 +1038,7 @@ router.get("/restaurants/:restaurantId/capital/applications/:id/documents", capi
   res.json(rows);
 });
 
-router.post("/restaurants/:restaurantId/capital/applications/:id/documents", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/capital/applications/:id/documents", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const schema = z.object({
     label: z.string().min(1),
@@ -1062,7 +1062,7 @@ router.post("/restaurants/:restaurantId/capital/applications/:id/documents", cap
   res.json(row);
 });
 
-router.get("/restaurants/:restaurantId/capital/applications/:id/repayments", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.get("/restaurants/:restaurantId/capital/applications/:id/repayments", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   const id = Number(req.params.id);
   const rows = await db.select().from(capitalRepaymentsTable)
     .where(and(eq(capitalRepaymentsTable.applicationId, id), eq(capitalRepaymentsTable.restaurantId, rid(req))))
@@ -1075,7 +1075,7 @@ router.get("/restaurants/:restaurantId/capital/applications/:id/repayments", cap
   res.json({ entries: rows, totals });
 });
 
-router.post("/restaurants/:restaurantId/capital/applications/:id/repayments/run", capitalGated(), requireRole("owner", "manager", "super_admin"), async (req, res) => {
+router.post("/restaurants/:restaurantId/capital/applications/:id/repayments/run", capitalGated(), requireRole("owner", "manager", "accountant", "super_admin"), async (req, res) => {
   // Placeholder: compute repayment entries from yesterday's sales back to the
   // application's acceptance/disbursement date. Idempotent via the unique
   // (applicationId, forDate) index.

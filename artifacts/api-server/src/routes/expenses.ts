@@ -48,7 +48,7 @@ router.use(
     "/restaurants/:restaurantId/expenses",
     "/restaurants/:restaurantId/recurring-expenses",
   ],
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "accountant", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature("expense_tracking"),
 );

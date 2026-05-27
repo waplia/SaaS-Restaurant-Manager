@@ -62,7 +62,7 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const baseScope = "/restaurants/:restaurantId/vendor-invoices";
 router.use(
   baseScope,
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "accountant", "super_admin"),
   validateRestaurantAccess,
   requirePlanFeature(PLAN_FEATURE),
 );

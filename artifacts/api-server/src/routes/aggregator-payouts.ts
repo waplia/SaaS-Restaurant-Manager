@@ -58,7 +58,7 @@ const aggregatorEnum = z.enum(AGGREGATORS);
 
 router.use(
   "/restaurants/:restaurantId/aggregator-payouts",
-  requireRole("owner", "manager", "super_admin"),
+  requireRole("owner", "manager", "accountant", "super_admin"),
   validateRestaurantAccess,
 );
 
