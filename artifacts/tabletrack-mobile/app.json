@@ -3,6 +3,7 @@
     "name": "KhanaLagao Restaurant",
     "slug": "tabletrack-mobile",
     "version": "1.0.0",
+    "runtimeVersion": { "policy": "appVersion" },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tabletrack-mobile",
@@ -54,6 +55,7 @@
       "expo-font",
       "expo-web-browser",
       "expo-secure-store",
+      "expo-updates",
       [
         "expo-camera",
         {

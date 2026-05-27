@@ -20,6 +20,7 @@ import { setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppAlertProvider } from "@/components/ui/AppAlert";
+import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { getApiBaseUrl } from "@/lib/apiBaseUrl";
@@ -255,6 +256,12 @@ export default function RootLayout() {
                   <AppAlertProvider>
                     <StatusBar style="dark" translucent backgroundColor="transparent" />
                     <RootLayoutNav />
+                    {/* Checks the App Store / Play Store on launch +
+                        foreground for a newer version, and the
+                        expo-updates channel for an OTA JS bundle. Renders
+                        a dismissible modal / banner when something is
+                        available; renders nothing on web or in dev. */}
+                    <UpdatePrompt />
                   </AppAlertProvider>
                 </KeyboardProvider>
               </GestureHandlerRootView>
