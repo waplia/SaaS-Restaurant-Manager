@@ -72,7 +72,10 @@ const ROLE_PERMISSIONS: Record<StaffRole, ReadonlyArray<PermissionAction>> = {
   cashier: [
     "order.create", "bill.print", "bill.split", "payment.capture",
     "order.discount.apply",
-    "shift.open", "shift.close", "cash.drop",
+    // Cashier owns the drawer end-to-end: open/close the shift, drop
+    // (cash out for safe drops / payouts), and pickup (cash in for
+    // owner adds / change top-ups).
+    "shift.open", "shift.close", "cash.drop", "cash.pickup",
   ],
   waiter: [
     "order.create", "bill.print", "kot.reprint",

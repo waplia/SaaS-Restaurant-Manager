@@ -199,15 +199,39 @@ export default function CashierShiftScreen() {
       `Opened by: ${session.openedByName ?? "—"} at ${new Date(session.openedAt).toLocaleString()}`,
       `Status: ${session.status.toUpperCase()}`,
       "",
-      `Opening float: ${fmtCurrency(totalsView?.openingFloat ?? session.openingFloat)}`,
-      `Cash sales:    ${fmtCurrency(totalsView?.cashSales)}`,
-      `Cash in:       ${fmtCurrency(totalsView?.cashIn)}`,
-      `Cash out:      ${fmtCurrency(totalsView?.cashOut)}`,
-      `Refunds:       ${fmtCurrency(totalsView?.refunds)}`,
-      `Expected cash: ${fmtCurrency(totalsView?.expectedCash)}`,
-      session.actualCash != null ? `Counted cash:  ${fmtCurrency(session.actualCash)}` : "",
-      session.overShort != null ? `Over/short:    ${fmtCurrency(session.overShort)}` : "",
+      `Opening float:  ${fmtCurrency(totalsView?.openingFloat ?? session.openingFloat)}`,
+      `Cash from bills:${fmtCurrency(totalsView?.cashSales)}`,
+      `Manual cash in: ${fmtCurrency(totalsView?.cashIn)}`,
+      `Cash out:       ${fmtCurrency(totalsView?.cashOut)}`,
+      `Refunds:        ${fmtCurrency(totalsView?.refunds)}`,
+      `Expected cash:  ${fmtCurrency(totalsView?.expectedCash)}`,
+      session.actualCash != null ? `Counted cash:   ${fmtCurrency(session.actualCash)}` : "",
+      session.overShort != null ? `Over/short:     ${fmtCurrency(session.overShort)}` : "",
     ].filter(Boolean).join("\n");
+
+    // Web preview / desktop browsers don't have React Native's Share sheet,
+    // so fall back to a printable popup. Native iOS/Android use the share
+    // sheet (which can route to AirDrop, printers, WhatsApp, etc.).
+    if (Platform.OS === "web") {
+      try {
+        const win = typeof window !== "undefined"
+          ? window.open("", "_blank", "width=420,height=640")
+          : null;
+        if (!win) {
+          Alert.alert("Pop-up blocked", "Allow pop-ups for this site to print the shift report.");
+          return;
+        }
+        const safe = lines.replace(/[<&>]/g, (c) => ({ "<": "&lt;", "&": "&amp;", ">": "&gt;" }[c] ?? c));
+        win.document.write(`<!doctype html><html><head><title>Shift #${session.id}</title>
+<style>body{font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:24px;white-space:pre-wrap}</style>
+</head><body>${safe}<script>setTimeout(()=>window.print(),200);</script></body></html>`);
+        win.document.close();
+      } catch {
+        Alert.alert("Print", "Could not open the print window.");
+      }
+      return;
+    }
+
     try {
       await Share.share({ message: lines, title: `Shift report #${session.id}` });
     } catch {
@@ -299,10 +323,29 @@ export default function CashierShiftScreen() {
               </View>
 
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                <Stat label="Cash sales" value={fmtCurrency(totals?.cashSales)} tone="success" />
-                <Stat label="Cash in" value={fmtCurrency(totals?.cashIn)} tone="success" />
-                <Stat label="Cash out" value={fmtCurrency(totals?.cashOut)} tone="warn" />
-                <Stat label="Refunds" value={fmtCurrency(totals?.refunds)} tone="warn" />
+                <Stat
+                  label="Cash from bills"
+                  value={fmtCurrency(totals?.cashSales)}
+                  tone="success"
+                  hint="Every bill you mark Cash adds here automatically"
+                />
+                <Stat
+                  label="Manual cash in"
+                  value={fmtCurrency(totals?.cashIn)}
+                  tone="success"
+                  hint="Owner adds, change top-ups, etc."
+                />
+                <Stat
+                  label="Cash out"
+                  value={fmtCurrency(totals?.cashOut)}
+                  tone="warn"
+                  hint="Pickups, drops, vendor payouts"
+                />
+                <Stat
+                  label="Refunds"
+                  value={fmtCurrency(totals?.refunds)}
+                  tone="warn"
+                />
               </View>
             </AppCard>
 
@@ -513,7 +556,7 @@ export default function CashierShiftScreen() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" | "primary" | "success" }) {
+function Stat({ label, value, tone, hint }: { label: string; value: string; tone?: "warn" | "primary" | "success"; hint?: string }) {
   const t = useTheme();
   const fg =
     tone === "primary" ? t.colors.primary
@@ -543,6 +586,11 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
       >
         {value}
       </AppText>
+      {hint ? (
+        <AppText variant="micro" color="mutedForeground" numberOfLines={2}>
+          {hint}
+        </AppText>
+      ) : null}
     </View>
   );
 }
