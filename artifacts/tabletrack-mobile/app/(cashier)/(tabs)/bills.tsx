@@ -153,8 +153,8 @@ export default function CashierBillsScreen() {
   const heldOrders = heldQ.data ?? [];
 
   const allOrders = useMemo<Order[]>(() => {
-    const raw = (ordersQ.data as OrderList | undefined) ?? [];
-    return (raw as unknown as Order[]);
+    const raw = (ordersQ.data?.data ?? []) as unknown as Order[];
+    return raw;
   }, [ordersQ.data]);
 
   const filteredOrders = useMemo<Order[]>(() => {

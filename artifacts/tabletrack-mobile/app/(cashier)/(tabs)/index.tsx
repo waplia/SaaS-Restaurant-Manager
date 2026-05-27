@@ -118,8 +118,7 @@ export default function CashierPosScreen() {
     enabled: !!accessToken && !!restaurantId,
   });
 
-  const openOrders = (openOrdersData as OrderList | undefined) ?? [];
-  const openList = (openOrders as unknown as OpenOrder[]) ?? [];
+  const openList = ((openOrdersData?.data ?? []) as unknown as OpenOrder[]);
   const activeBills = openList.filter((o) => o.status !== "cancelled").length;
   const pendingPayments = openList.filter((o) => o.paymentStatus !== "paid").length;
   const heldCount = (heldQ.data ?? []).length;

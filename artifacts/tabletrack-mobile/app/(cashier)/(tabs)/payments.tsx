@@ -42,7 +42,7 @@ export default function CashierPaymentsScreen() {
   });
 
   const unpaid = useMemo(() => {
-    const raw = ((data as OrderList | undefined) ?? []) as unknown as Order[];
+    const raw = (data?.data ?? []) as unknown as Order[];
     return raw.filter((o) => o.paymentStatus !== "paid");
   }, [data]);
 
