@@ -37,6 +37,11 @@ interface Props {
   onReprintKot?: () => void;
   /** Hold the current bill (F5). */
   onHold?: () => void;
+  /** Task #693 trio — place-then-print/pay in one click. Each composes
+   *  Send + follow-up; no-op safely when nothing is pending. */
+  onKotAndPrint?: () => void;
+  onBillAndPay?: () => void;
+  onBillAndPrint?: () => void;
   /** Add / edit a line note. */
   onSetLineNote?: (lineKey: string, note: string) => void;
   /** Cashier display name shown in the header. */
@@ -68,7 +73,8 @@ export function CartPane(props: Props) {
     selectedCartIdx, onSelectCartIdx, onEditLine,
     onQtyDelta, onRemoveLine, onSend, onClear, onOpenDiscount,
     onOpenLineDiscount, onRemoveDiscount, onPay, onSplit, onReprint, onReprintKot,
-    onHold, onSetLineNote, cashierName, compact,
+    onHold, onKotAndPrint, onBillAndPay, onBillAndPrint,
+    onSetLineNote, cashierName, compact,
     roundOffEnabled, onToggleRoundOff, cartListRef,
   } = props;
 
@@ -324,22 +330,26 @@ export function CartPane(props: Props) {
           padding: "10px 12px 0 12px",
         }}>
           {onHold && (
-            <ActionPill onClick={onHold} disabled={busy || cart.length === 0} title="Hold bill (F5)">
+            <ActionPill onClick={onHold} disabled={busy || cart.length === 0} title="Hold bill (F5)"
+              tone="#d97706">
               ⏸ Hold
             </ActionPill>
           )}
           {onReprintKot && placedOrder && (
-            <ActionPill onClick={onReprintKot} disabled={busy} title="Reprint last KOT (F9)">
+            <ActionPill onClick={onReprintKot} disabled={busy} title="Reprint last KOT (F9)"
+              tone="#2563eb">
               🖨 KOT
             </ActionPill>
           )}
           {onReprint && placedOrder && (
-            <ActionPill onClick={onReprint} disabled={busy} title="Reprint bill">
+            <ActionPill onClick={onReprint} disabled={busy} title="Reprint bill"
+              tone="#0891b2">
               🧾 Bill
             </ActionPill>
           )}
           {onOpenDiscount && placedOrder && (
-            <ActionPill onClick={onOpenDiscount} disabled={busy} title="Apply discount">
+            <ActionPill onClick={onOpenDiscount} disabled={busy} title="Apply discount"
+              tone="#9333ea">
               % Disc
             </ActionPill>
           )}
@@ -372,6 +382,37 @@ export function CartPane(props: Props) {
         )}
         <div style={{ height: 1, background: colors.border, margin: "8px 0" }} />
         <Row label="Total" value={fmtINR(grandTotal)} bold />
+
+        {/* Task #693 trio — KOT & Print · Bill & Pay · Bill & Print.
+            Each composes Send + a follow-up (print KOT / open payment /
+            print bill) in one click. Shown whenever something is
+            actionable: a pending cart, OR an unpaid placed order. */}
+        {(onKotAndPrint || onBillAndPay || onBillAndPrint) &&
+         (cart.length > 0 || (placedOrder && placedOrder.paymentStatus !== "paid")) && (
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 8, marginTop: 12,
+          }}>
+            {onKotAndPrint && (
+              <ComboBtn onClick={onKotAndPrint} disabled={busy || (!placedOrder && cart.length === 0)}
+                bg="#2563eb" hover="#1d4ed8" title="Place + print KOT">
+                🧑‍🍳 KOT & Print
+              </ComboBtn>
+            )}
+            {onBillAndPay && (
+              <ComboBtn onClick={onBillAndPay} disabled={busy || (!placedOrder && cart.length === 0)}
+                bg={colors.success} hover="#15803d" title="Place + open payment">
+                💳 Bill & Pay
+              </ComboBtn>
+            )}
+            {onBillAndPrint && (
+              <ComboBtn onClick={onBillAndPrint} disabled={busy || (!placedOrder && cart.length === 0)}
+                bg="#d97706" hover="#b45309" title="Place + print bill">
+                🧾 Bill & Print
+              </ComboBtn>
+            )}
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           {placedOrder ? (
@@ -413,7 +454,8 @@ export function CartPane(props: Props) {
                   <Button variant="ghost" onClick={onSplit} disabled={busy || cart.length > 0} style={{ flex: 1 }}>Split</Button>
                 )}
                 {onPay && (
-                  <Button onClick={onPay} disabled={busy || cart.length > 0} style={{ flex: 2 }}>
+                  <Button onClick={onPay} disabled={busy || cart.length > 0}
+                    style={{ flex: 2, background: colors.success, color: "#fff" }}>
                     Pay {fmtINR(grandTotal)} (F8)
                   </Button>
                 )}
@@ -437,24 +479,63 @@ const lineActionStyle: React.CSSProperties = {
   fontSize: 11, cursor: "pointer", padding: "4px 8px", fontWeight: 600,
 };
 
-function ActionPill({ children, onClick, disabled, title, active }: {
+function ActionPill({ children, onClick, disabled, title, active, tone }: {
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   title?: string;
   active?: boolean;
+  /** Accent color when not active; applied as a tinted background and
+   *  matching text color so each pill is visually distinct without
+   *  overwhelming the cart. */
+  tone?: string;
 }) {
+  const bg = active
+    ? colors.brandSoft
+    : tone ? `${tone}26` /* ~15% alpha */ : colors.panelAlt;
+  const fg = active ? "#fff" : tone ?? colors.textPrimary;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
       style={{
-        background: active ? colors.brandSoft : colors.panelAlt,
-        color: active ? "#fff" : colors.textPrimary,
-        border: 0, padding: "8px 6px", borderRadius: 6,
+        background: bg, color: fg,
+        border: tone && !active ? `1px solid ${tone}55` : 0,
+        padding: "8px 6px", borderRadius: 6,
         fontSize: 11, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.4 : 1,
+      }}
+    >{children}</button>
+  );
+}
+
+/** Solid-fill compound action button for the Task #693 trio.
+ *  Each row gets its own brand color so cashiers can spot them at a
+ *  glance during a rush. */
+function ComboBtn({ children, onClick, disabled, title, bg, hover }: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  bg: string;
+  hover: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = hover; }}
+      onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.background = bg; }}
+      style={{
+        background: bg, color: "#fff", border: 0,
+        padding: "12px 8px", borderRadius: 8,
+        fontSize: 13, fontWeight: 700,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        transition: "background 120ms ease",
+        boxShadow: disabled ? "none" : "0 1px 2px rgba(0,0,0,0.25)",
       }}
     >{children}</button>
   );

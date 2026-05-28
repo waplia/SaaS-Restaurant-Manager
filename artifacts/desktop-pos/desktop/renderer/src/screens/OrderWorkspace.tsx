@@ -391,6 +391,9 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
   }, [tables, heldBills]);
 
   // ─── Reprint last KOT ──────────────────────────────────────────────
+  // Note: the compound `handleKotAndPrint` (below) shares the same print
+  // helper (`printKotsFor`) but is defined after `handleSend` so it can
+  // place-then-print in one click.
   const handleReprintKot = useCallback(async () => {
     if (!placedOrder) return;
     try {
@@ -515,27 +518,27 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
     })();
   }, [props.handoff, props, loadOrderIntoPane, handlePickTable, tables]);
 
-  const handleSend = useCallback(async () => {
-    if (cart.length === 0) return;
+  const handleSend = useCallback(async (): Promise<OrderDetailView | null> => {
+    if (cart.length === 0) return placedOrder;
     if (orderType === "dine_in" && !selectedTable && !placedOrder) {
       setOpError("Pick a table for dine-in orders.");
-      return;
+      return null;
     }
     setSending(true); setOpError(null);
     const key = takeSendKey();
     try {
+      let detail: OrderDetailView;
       if (placedOrder) {
-        const detail = await window.khanalagao.orders.addItems({
+        detail = await window.khanalagao.orders.addItems({
           orderId: placedOrder.id,
           items: buildItemsPayload(),
           idempotencyKey: key,
         });
-        setPlacedOrder(detail);
       } else {
         // Only attach a tableId for dine-in — takeaway / delivery never
         // carry one, even if the cashier had picked one and switched mode.
         const tableId = orderType === "dine_in" ? (selectedTable?.id ?? null) : null;
-        const detail = await window.khanalagao.orders.create({
+        detail = await window.khanalagao.orders.create({
           orderType,
           tableId,
           customerId: customer?.id ?? null,
@@ -544,15 +547,17 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
           items: buildItemsPayload(),
           idempotencyKey: key,
         });
-        setPlacedOrder(detail);
       }
+      setPlacedOrder(detail);
       setCart([]);
       setSelectedCartIdx(null);
       setOrdersRailToken(t => t + 1);
       clearSendKey();
+      return detail;
     } catch (e) {
       // Keep the key — a retry will use the same one and server dedupes.
       setOpError((e as Error).message);
+      return null;
     } finally {
       setSending(false);
     }
@@ -560,6 +565,45 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
     cart.length, orderType, selectedTable, placedOrder, buildItemsPayload,
     customer, walkInName, walkInPhone,
   ]);
+
+  // ─── Compound actions (Task #693 parity with web POS) ───────────────
+  // Each composes handleSend() (no-op if cart is empty and the order is
+  // already placed) with a follow-up. The follow-up uses the freshly
+  // returned detail so we don't race React state.
+  const printKotsFor = useCallback(async (ord: OrderDetailView) => {
+    try {
+      await window.khanalagao.printers.printOrderKots({
+        orderNumber: shortOrderNumber(ord),
+        items: ord.items.map(it => ({
+          name: it.menuItemName,
+          quantity: it.quantity,
+          kitchenId: it.kitchenId ?? null,
+          kitchenName: it.kitchenName ?? null,
+          modifiers: (it.modifiers ?? []).map(m => ({ name: m.name })),
+          notes: it.notes ?? null,
+        })),
+      });
+      play("kot");
+    } catch (e) { setOpError(`KOT print failed: ${(e as Error).message}`); play("error"); }
+  }, [play]);
+
+  const handleKotAndPrint = useCallback(async () => {
+    const ord = await handleSend();
+    if (ord) await printKotsFor(ord);
+  }, [handleSend, printKotsFor]);
+
+  const handleBillAndPay = useCallback(async () => {
+    const ord = await handleSend();
+    if (ord && ord.paymentStatus !== "paid") setShowPay(true);
+  }, [handleSend]);
+
+  const handleBillAndPrint = useCallback(async () => {
+    const ord = await handleSend();
+    if (!ord) return;
+    try {
+      await window.khanalagao.printers.printBillForOrder({ orderId: ord.id });
+    } catch (e) { setOpError(`Bill print failed: ${(e as Error).message}`); }
+  }, [handleSend]);
 
   // ─── Discount ops ──────────────────────────────────────────────────
   const refreshPlaced = useCallback(async () => {
@@ -842,6 +886,9 @@ export function OrderWorkspace(props: OrderWorkspaceProps = {}) {
             await window.khanalagao.printers.printBillForOrder({ orderId: placedOrder.id });
           } catch (e) { setOpError((e as Error).message); }
         } : undefined}
+        onKotAndPrint={handleKotAndPrint}
+        onBillAndPay={handleBillAndPay}
+        onBillAndPrint={handleBillAndPrint}
         cartListRef={cartListRef}
       />
 
