@@ -2939,13 +2939,47 @@ export default function PosPage() {
                 </Button>
               </div>
 
-              {placedOrder ? (
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={() => setShowSplitModal(true)}>
-                    <Scissors className="w-3.5 h-3.5 mr-1.5" />Split Bill
+              {/* Legacy single-action buttons — kept alongside the new
+                  compound trio above so cashiers who still want a
+                  pure "Place Order" or "Pay Now" tap have it. */}
+              {!placedOrder ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={createOrder.isPending || cart.length === 0}
+                    onClick={() => { void handlePlaceOrder(); }}
+                    title="Place order without printing"
+                  >
+                    Place Order
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={createOrder.isPending || payOrder.isPending || cart.length === 0}
+                    onClick={handlePayNow}
+                    title="Place order and open payment"
+                  >
+                    <CreditCard className="w-3.5 h-3.5 mr-1.5" />Pay Now
                   </Button>
                 </div>
-              ) : null}
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSplitModal(true)}
+                  >
+                    <Scissors className="w-3.5 h-3.5 mr-1.5" />Split Bill
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={payOrder.isPending}
+                    onClick={() => setShowPayModal(true)}
+                  >
+                    <CreditCard className="w-3.5 h-3.5 mr-1.5" />Pay
+                  </Button>
+                </div>
+              )}
 
               {/* Pre-placement quick actions: Hold / Recall */}
               {!placedOrder && (
