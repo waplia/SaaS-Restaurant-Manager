@@ -73,6 +73,18 @@ export interface CashRegisterSession {
   shiftId: number | null;
 }
 
+export interface CurrentCashRegister {
+  session: CashRegisterSession | null;
+  totals: CashRegisterTotals | null;
+  /** True when a register is open but opened by someone else — the cashier
+   *  can see the state exists, but cannot open / close / move cash on it. */
+  blockedByOther?: boolean;
+  blockedBy?: {
+    openedByName: string | null;
+    openedAt: string;
+  } | null;
+}
+
 export interface CashRegisterTotals {
   openingFloat: number;
   cashSales: number;

@@ -142,18 +142,32 @@ async function computeSessionTotals(executor: DbOrTx, sessionId: number, restaur
 router.get("/restaurants/:restaurantId/cash-register/current", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
   const session = await findOpenSession(db, restaurantId);
-  if (!session) return void res.json({ session: null, totals: null });
-  // Cashier can only see the open session if they opened it themselves.
-  // Treat another cashier's open session as "no session" so the UI prompts
-  // them to wait rather than exposing totals/identity of the other shift.
-  if (isCashierOnly(req) && !canActOnSession(req, session)) {
-    return void res.json({ session: null, totals: null });
-  }
-  const totals = await computeSessionTotals(db, session.id, restaurantId, Number(session.openingFloat));
+  if (!session) return void res.json({ session: null, totals: null, blockedByOther: false });
   const [openedBy] = session.openedByUserId
     ? await db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable).where(eq(usersTable.id, session.openedByUserId))
     : [null];
-  res.json({ session: { ...session, openedByName: openedBy?.name ?? null }, totals });
+  // Cashier can only operate on their own session, but the UI still needs
+  // to know a register is open elsewhere — otherwise they keep tapping
+  // "Open register" and getting a 409 from the open endpoint. Surface a
+  // distinct shape (no totals — those stay private to whoever opened it)
+  // so the mobile/web client can show a "register is open by X" state.
+  if (isCashierOnly(req) && !canActOnSession(req, session)) {
+    return void res.json({
+      session: null,
+      totals: null,
+      blockedByOther: true,
+      blockedBy: {
+        openedByName: openedBy?.name ?? null,
+        openedAt: session.openedAt,
+      },
+    });
+  }
+  const totals = await computeSessionTotals(db, session.id, restaurantId, Number(session.openingFloat));
+  res.json({
+    session: { ...session, openedByName: openedBy?.name ?? null },
+    totals,
+    blockedByOther: false,
+  });
 });
 
 router.get("/restaurants/:restaurantId/cash-register/sessions",

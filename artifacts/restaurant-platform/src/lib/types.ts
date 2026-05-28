@@ -2046,6 +2046,14 @@ export interface CashRegisterTotals {
 export interface CashRegisterCurrent {
   session: CashRegisterSession | null;
   totals: CashRegisterTotals | null;
+  /** When true, a register is open but the requester (cashier-only) cannot
+   *  act on it because someone else opened it. Managers/owners never see
+   *  this — they always get the full `session`. */
+  blockedByOther?: boolean;
+  blockedBy?: {
+    openedByName: string | null;
+    openedAt: string;
+  } | null;
 }
 
 export interface CashRegisterSessionDetail {

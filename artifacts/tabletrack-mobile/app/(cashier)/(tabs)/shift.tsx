@@ -16,12 +16,10 @@ import { usePermission } from "@/hooks/usePermission";
 import {
   cashierFetch, INR_DENOMINATIONS,
   type CashRegisterSession, type CashRegisterTotals, type CashMovement,
+  type CurrentCashRegister,
 } from "@/lib/cashierApi";
 
-type CurrentSession = {
-  session: CashRegisterSession | null;
-  totals: CashRegisterTotals | null;
-};
+type CurrentSession = CurrentCashRegister;
 
 interface MovementInput { amount: string; reason: string; type: "cash_in" | "cash_out" }
 
@@ -50,34 +48,33 @@ export default function CashierShiftScreen() {
   const [movement, setMovement] = useState<MovementInput>({ amount: "", reason: "", type: "cash_in" });
   const [confirmClose, setConfirmClose] = useState(false);
 
-  // Polling interval + freshness matches the web Cash Register page
-  // (src/lib/hooks.ts useCashRegisterCurrent — 15s). If the desktop POS or
-  // web manager opens the register, mobile reflects it within ~15s without
-  // any tap. Plus we force a refetch on tab focus below so the cashier
-  // never sees a stale "register closed" state after switching tabs.
+  // Polls every 15s (matches web's useCashRegisterCurrent). The global
+  // focus bridge (hooks/useReactQueryRefreshBridge.ts) already triggers
+  // a refetch when the screen comes back into focus via the standard
+  // refetchOnWindowFocus path — no extra useFocusEffect needed, which
+  // previously caused a refetch storm (currentQ identity changes every
+  // render → focus callback identity changes → fires every render).
   const currentQ = useQuery<CurrentSession>({
     queryKey: ["cash-register-current", restaurantId],
     queryFn: () => cashierFetch<CurrentSession>(accessToken, `/restaurants/${restaurantId}/cash-register/current`),
     refetchInterval: 15_000,
-    refetchOnMount: "always",
-    staleTime: 0,
     enabled: !!accessToken,
   });
+
+  // Stable refetch trigger on tab focus — invalidate via the query key
+  // instead of holding a ref to the query object, so we don't loop.
+  useFocusEffect(
+    useCallback(() => {
+      if (!accessToken) return;
+      void qc.invalidateQueries({ queryKey: ["cash-register-current", restaurantId] });
+    }, [accessToken, qc, restaurantId]),
+  );
 
   const session = currentQ.data?.session ?? null;
   const totals = currentQ.data?.totals ?? null;
   const isOpen = session?.status === "open";
-
-  // Re-check the register state every time the cashier lands on this tab.
-  // The 15s interval + react-query focus bridge already covers most cases,
-  // but a hard refetch on focus guarantees the "Open register" button
-  // never lies — the most common bug was: another device opens the
-  // register → mobile cache still says closed → cashier taps Open → 409.
-  useFocusEffect(
-    useCallback(() => {
-      if (accessToken) void currentQ.refetch();
-    }, [accessToken, currentQ]),
-  );
+  const blockedByOther = currentQ.data?.blockedByOther === true;
+  const blockedBy = currentQ.data?.blockedBy ?? null;
 
   const detailsQ = useQuery({
     queryKey: ["cash-register-session", restaurantId, session?.id],
@@ -89,8 +86,6 @@ export default function CashierShiftScreen() {
       }>(accessToken, `/restaurants/${restaurantId}/cash-register/sessions/${session!.id}`),
     enabled: !!session?.id && !!accessToken && (canClose || canMove),
     refetchInterval: 15_000,
-    refetchOnMount: "always",
-    staleTime: 0,
   });
   const movements = detailsQ.data?.movements ?? [];
 
@@ -324,7 +319,35 @@ export default function CashierShiftScreen() {
           />
         }
       >
-        {currentQ.isLoading ? null : !isOpen ? (
+        {currentQ.isLoading ? null : blockedByOther ? (
+          <AppCard padding={16} shadow="sm" style={{ gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  alignItems: "center", justifyContent: "center",
+                  backgroundColor: "#dbeafe",
+                }}
+              >
+                <AppIcon name="lock-closed" size={20} color="#1d4ed8" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText variant="h3">Register is already open</AppText>
+                <AppText variant="small" color="mutedForeground">
+                  {blockedBy?.openedByName
+                    ? `Opened by ${blockedBy.openedByName}`
+                    : "Opened on another device"}
+                  {blockedBy?.openedAt
+                    ? ` · ${new Date(blockedBy.openedAt).toLocaleString()}`
+                    : ""}
+                </AppText>
+                <AppText variant="small" color="mutedForeground" style={{ marginTop: 6 }}>
+                  Only the cashier who opened it (or a manager) can record cash or close it. Ask them to hand the session over, or wait for it to close.
+                </AppText>
+              </View>
+            </View>
+          </AppCard>
+        ) : !isOpen ? (
           <AppCard padding={16} shadow="sm" style={{ gap: 10 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View

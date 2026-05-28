@@ -746,6 +746,20 @@ export default function CashRegisterPage() {
       <div className="p-6 space-y-6 max-w-7xl">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>
+        ) : !session && current?.blockedByOther ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl bg-card">
+            <Lock className="w-12 h-12 text-blue-500/60 mb-3" />
+            <h3 className="font-semibold text-foreground">A register is already open</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+              {current.blockedBy?.openedByName
+                ? `Opened by ${current.blockedBy.openedByName}`
+                : "Opened on another device"}
+              {current.blockedBy?.openedAt
+                ? ` · ${format(new Date(current.blockedBy.openedAt), "MMM d, HH:mm")}`
+                : ""}
+              . Only the opener (or a manager) can record cash or close it.
+            </p>
+          </div>
         ) : !session ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border rounded-xl bg-card">
             <Banknote className="w-12 h-12 text-muted-foreground/40 mb-3" />
