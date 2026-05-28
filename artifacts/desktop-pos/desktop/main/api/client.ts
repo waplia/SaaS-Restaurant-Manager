@@ -595,3 +595,197 @@ export function decomposeIntoInrDenominations(rupees: number): DenominationInput
   }
   return out;
 }
+
+// ─── Phase 6: specialist workspace endpoints ────────────────────────────────
+// Thin wrappers around existing REST routes — return raw JSON so the
+// renderer can narrow the shape with its own per-screen DTOs.
+
+export interface SpecialistApi {
+  invList(r: number, q: { lowStock?: boolean; search?: string }): Promise<unknown[]>;
+  invAdjust(r: number, id: number, body: Record<string, unknown>): Promise<unknown>;
+  invTx(r: number, id: number, limit?: number): Promise<unknown[]>;
+  invWasteLog(r: number): Promise<unknown[]>;
+  invSuppliers(r: number): Promise<unknown[]>;
+  invSupplierCreate(r: number, body: Record<string, unknown>): Promise<unknown>;
+  invPOList(r: number, status?: string): Promise<unknown[]>;
+  invPOCreate(r: number, body: Record<string, unknown>): Promise<unknown>;
+  invPOReceive(r: number, id: number): Promise<unknown>;
+
+  accExpenses(r: number, q: Record<string, string | number | undefined>): Promise<unknown>;
+  accExpenseCreate(r: number, body: Record<string, unknown>): Promise<unknown>;
+  accExpenseCategories(r: number): Promise<unknown[]>;
+  accExpenseCategoryCreate(r: number, body: Record<string, unknown>): Promise<unknown>;
+  accPayments(r: number, q: Record<string, string | number | undefined>): Promise<unknown>;
+  accPaymentsSummary(r: number, q: { from?: string; to?: string }): Promise<unknown>;
+  accPnl(r: number, q: { from?: string; to?: string }): Promise<unknown>;
+  accTargets(r: number): Promise<unknown>;
+
+  mktCampaigns(r: number, q: Record<string, string | undefined>): Promise<unknown[]>;
+  mktAnalytics(r: number): Promise<unknown>;
+  mktLogs(r: number, limit?: number): Promise<unknown[]>;
+  mktDraft(r: number, body: Record<string, unknown>): Promise<unknown>;
+  mktTemplates(r: number, channel: string): Promise<unknown[]>;
+  mktReviewsFeedback(r: number, limit?: number): Promise<unknown[]>;
+  mktReviewsExternal(r: number, limit?: number): Promise<unknown[]>;
+  mktReviewsRecovery(r: number, status?: string): Promise<unknown[]>;
+  mktCouponsValidate(r: number, code: string): Promise<unknown>;
+  mktCustomers(r: number, q: Record<string, string | number | undefined>): Promise<unknown[]>;
+
+  delAssignments(r: number, status?: string): Promise<unknown[]>;
+  delExecutives(r: number): Promise<unknown[]>;
+  delAssign(r: number, body: Record<string, unknown>): Promise<unknown>;
+  delUpdateStatus(r: number, assignmentId: number, body: Record<string, unknown>): Promise<unknown>;
+  delProof(r: number, assignmentId: number, body: { proofPhotoUrl: string }): Promise<unknown>;
+  delUnavailable(r: number, assignmentId: number, body: { reason: string }): Promise<unknown>;
+  delCodCollected(r: number, assignmentId: number): Promise<unknown>;
+  delCodSummary(r: number, q: { from?: string; to?: string }): Promise<unknown>;
+  delHandovers(r: number, limit?: number): Promise<unknown[]>;
+  delHandoverCreate(r: number, body: Record<string, unknown>): Promise<unknown>;
+  delAggregatorDashboard(r: number): Promise<unknown>;
+  delAggregatorSheets(r: number): Promise<unknown[]>;
+}
+
+function qs(q: Record<string, string | number | boolean | undefined>): string {
+  const parts = Object.entries(q)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+// Attach the specialist surface to the ApiClient prototype. Keeps the
+// existing class declaration above untouched while still being typed.
+declare module "./client" {
+  interface ApiClient extends SpecialistApi {}
+}
+const P = ApiClient.prototype as ApiClient & SpecialistApi;
+
+P.invList = function (r, q) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/inventory${qs(q)}`);
+};
+P.invAdjust = function (r, id, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/inventory/${id}/adjust`, { method: "POST", body });
+};
+P.invTx = function (r, id, limit) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/inventory/${id}/transactions${qs({ limit })}`);
+};
+P.invWasteLog = function (r) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/inventory/waste-log`);
+};
+P.invSuppliers = function (r) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/suppliers`);
+};
+P.invSupplierCreate = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/suppliers`, { method: "POST", body });
+};
+P.invPOList = function (r, status) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/purchase-orders${qs({ status })}`);
+};
+P.invPOCreate = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/purchase-orders`, { method: "POST", body });
+};
+P.invPOReceive = function (r, id) {
+  return this.request<unknown>(`/api/restaurants/${r}/purchase-orders/${id}`, {
+    method: "PATCH", body: { status: "received" },
+  });
+};
+
+P.accExpenses = function (r, q) {
+  return this.request<unknown>(`/api/restaurants/${r}/expenses${qs(q)}`);
+};
+P.accExpenseCreate = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/expenses`, { method: "POST", body });
+};
+P.accExpenseCategories = function (r) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/expense-categories`);
+};
+P.accExpenseCategoryCreate = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/expense-categories`, { method: "POST", body });
+};
+P.accPayments = function (r, q) {
+  return this.request<unknown>(`/api/restaurants/${r}/payments${qs(q)}`);
+};
+P.accPaymentsSummary = function (r, q) {
+  return this.request<unknown>(`/api/restaurants/${r}/payments/summary${qs(q)}`);
+};
+P.accPnl = function (r, q) {
+  return this.request<unknown>(`/api/restaurants/${r}/pnl${qs(q)}`);
+};
+P.accTargets = function (r) {
+  return this.request<unknown>(`/api/restaurants/${r}/accounting/targets`);
+};
+
+P.mktCampaigns = function (r, q) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/growth/campaigns${qs(q)}`);
+};
+P.mktAnalytics = function (r) {
+  return this.request<unknown>(`/api/restaurants/${r}/growth/analytics`);
+};
+P.mktLogs = function (r, limit) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/growth/logs${qs({ limit })}`);
+};
+P.mktDraft = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/growth/campaigns/draft`, { method: "POST", body });
+};
+P.mktTemplates = function (r, channel) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/growth/templates/${encodeURIComponent(channel)}`);
+};
+P.mktReviewsFeedback = function (r, limit) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/reviews/feedback${qs({ limit })}`);
+};
+P.mktReviewsExternal = function (r, limit) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/reviews/external${qs({ limit })}`);
+};
+P.mktReviewsRecovery = function (r, status) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/reviews/recovery${qs({ status })}`);
+};
+P.mktCouponsValidate = function (r, code) {
+  return this.request<unknown>(`/api/coupons/validate`, { method: "POST", body: { code, restaurantId: r } });
+};
+P.mktCustomers = function (r, q) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/customers${qs(q)}`);
+};
+
+P.delAssignments = function (r, status) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/delivery/assignments${qs({ status })}`);
+};
+P.delExecutives = function (r) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/delivery/executives`);
+};
+P.delAssign = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/assign`, { method: "POST", body });
+};
+P.delUpdateStatus = function (r, assignmentId, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/assignments/${assignmentId}/status`, {
+    method: "PATCH", body,
+  });
+};
+P.delProof = function (r, assignmentId, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/assignments/${assignmentId}/proof`, {
+    method: "POST", body,
+  });
+};
+P.delUnavailable = function (r, assignmentId, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/assignments/${assignmentId}/unavailable`, {
+    method: "POST", body,
+  });
+};
+P.delCodCollected = function (r, assignmentId) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/assignments/${assignmentId}/cod-collected`, {
+    method: "POST", body: {},
+  });
+};
+P.delCodSummary = function (r, q) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/cod-summary${qs(q)}`);
+};
+P.delHandovers = function (r, limit) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/delivery/handovers${qs({ limit })}`);
+};
+P.delHandoverCreate = function (r, body) {
+  return this.request<unknown>(`/api/restaurants/${r}/delivery/handovers`, { method: "POST", body });
+};
+P.delAggregatorDashboard = function (r) {
+  return this.request<unknown>(`/api/restaurants/${r}/aggregator-payouts/dashboard`);
+};
+P.delAggregatorSheets = function (r) {
+  return this.request<unknown[]>(`/api/restaurants/${r}/aggregator-payouts/sheets`);
+};

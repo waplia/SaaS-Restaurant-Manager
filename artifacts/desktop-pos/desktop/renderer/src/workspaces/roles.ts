@@ -68,7 +68,9 @@ export function availableWorkspaces(user: User): WorkspaceKey[] {
   if (role === "owner" || role === "tenant_owner" || role === "admin" || role === "manager") {
     return ["manager"];
   }
-  if (role === "cashier" || role === "waiter") return ["cashier"];
+  if (role === "cashier") return ["cashier"];
+  if (role === "waiter" || role === "server" || role === "host") return ["cashier"];
+  if (role === "chef" || role === "kitchen" || role === "cook" || role === "kds") return ["cashier"];
   if (role === "inventory" || role === "inventory_manager" || role === "storekeeper") {
     return ["inventory"];
   }
@@ -78,7 +80,9 @@ export function availableWorkspaces(user: User): WorkspaceKey[] {
   if (role === "marketing" || role === "crm" || role === "loyalty") {
     return ["marketing"];
   }
-  if (role === "delivery" || role === "dispatcher" || role === "rider_manager") {
+  if (role === "delivery" || role === "dispatcher" || role === "rider_manager"
+      || role === "delivery_executive" || role === "delivery_rider" || role === "rider"
+      || role === "delivery_manager" || role === "dispatch") {
     return ["delivery"];
   }
   // Unknown / empty role — return an empty list so the router shows the
@@ -95,7 +99,10 @@ export function defaultWorkspace(user: User): WorkspaceKey | null {
   if (list.length === 0) return null;
   const role = norm(user.role);
   // Owners default to the Manager Office; cashiers stay on the till.
-  if (role === "cashier" || role === "waiter") return "cashier";
+  if (role === "cashier" || role === "waiter" || role === "server" || role === "host"
+      || role === "chef" || role === "kitchen" || role === "cook" || role === "kds") {
+    return "cashier";
+  }
   return list[0];
 }
 
@@ -186,9 +193,18 @@ export function deriveAccess(user: User): AccessContext {
       "shift.open", "shift.close", "tables.read", "customers.read",
       "customers.write", "reports.read", "settings.read"
     ].forEach(p => perms.add(p));
-  } else if (role === "waiter") {
-    ["pos.use", "orders.read", "orders.write", "tables.read",
-      "customers.read", "kitchen.read"
+  } else if (role === "waiter" || role === "server" || role === "host") {
+    // Waiter surface — table-side service. Can take orders + send to
+    // kitchen + request the bill, but cannot close shifts or take
+    // payments themselves (cashier owns the till).
+    ["pos.use", "orders.read", "orders.write", "tables.read", "tables.write",
+      "customers.read", "kitchen.read", "waiter.scope",
+    ].forEach(p => perms.add(p));
+  } else if (role === "chef" || role === "kitchen" || role === "cook" || role === "kds") {
+    // Chef / kitchen surface — KOT board + order read-only. Cannot
+    // edit orders or touch payments. The cashier shell already has a
+    // KitchenScreen; chef nav scopes the rail to just that surface.
+    ["kitchen.read", "kitchen.bump", "orders.read", "chef.scope",
     ].forEach(p => perms.add(p));
   } else if (role === "inventory" || role === "inventory_manager" || role === "storekeeper") {
     ["inventory.read", "inventory.write", "menu.read", "reports.read"].forEach(p => perms.add(p));
@@ -199,7 +215,9 @@ export function deriveAccess(user: User): AccessContext {
   } else if (role === "marketing" || role === "crm" || role === "loyalty") {
     ["marketing.read", "marketing.write", "customers.read", "customers.write", "reports.read"].forEach(p => perms.add(p));
     modules.add("marketing");
-  } else if (role === "delivery" || role === "dispatcher" || role === "rider_manager") {
+  } else if (role === "delivery" || role === "dispatcher" || role === "rider_manager"
+             || role === "delivery_executive" || role === "delivery_rider" || role === "rider"
+             || role === "delivery_manager" || role === "dispatch") {
     ["delivery.read", "delivery.write", "orders.read"].forEach(p => perms.add(p));
     modules.add("delivery");
   }

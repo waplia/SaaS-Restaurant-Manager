@@ -3,10 +3,12 @@
  *
  * Each item declares its required permission(s) + module flags so the
  * sidebar and command palette can apply the same gates without divergence.
- * Everything ships `comingSoon: true` in this task — the foundation only.
- * Real screens land in the follow-up Manager / Inventory / Accountant /
- * Marketing / Delivery tasks, which will flip `comingSoon` off as they wire
- * each module.
+ * Specialist workspaces (Inventory, Accounts, Marketing, Delivery) are
+ * fully wired by `WorkspaceRouter` via `renderModule` — see the resolver
+ * map in `WorkspaceRouter.tsx` for the screen each `key` opens.
+ *
+ * Manager Office items are still placeholders — that workspace ships in
+ * its own dedicated task.
  */
 import type { NavItem, WorkspaceKey } from "./types";
 
@@ -132,77 +134,123 @@ const MANAGER_NAV: NavItem[] = [
 ];
 
 const INVENTORY_NAV: NavItem[] = [
-  { key: "stock", label: "Stock levels", group: "Inventory", icon: G("▦"),
-    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"], comingSoon: true },
-  { key: "movements", label: "Stock movements", group: "Inventory", icon: G("⇌"),
-    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"], comingSoon: true },
-  { key: "recipes", label: "Recipes & BOM", group: "Inventory", icon: G("⌬"),
-    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"], comingSoon: true },
+  { key: "raw-materials", label: "Raw materials", group: "Stock", icon: G("▦"),
+    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"],
+    aliases: ["stock", "ingredients"] },
+  { key: "menu-item-stock", label: "Menu item stock", group: "Stock", icon: G("☰"),
+    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"] },
+  { key: "low-stock", label: "Low stock", group: "Stock", icon: G("⚠"),
+    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"] },
+
+  { key: "warehouse", label: "Warehouse", group: "Warehouse", icon: G("⌂"),
+    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"] },
+  { key: "warehouse-type", label: "Warehouse type", group: "Warehouse", icon: G("◇"),
+    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"] },
+  { key: "stock-transfer", label: "Stock transfer / issue", group: "Warehouse", icon: G("⇌"),
+    requiredPermissions: ["inventory.write"], requiredModules: ["inventory"] },
+
   { key: "purchase", label: "Purchase orders", group: "Procurement", icon: G("⊞"),
-    requiredPermissions: ["inventory.write"], requiredModules: ["inventory"], comingSoon: true },
+    requiredPermissions: ["inventory.write"], requiredModules: ["inventory"] },
   { key: "suppliers", label: "Suppliers", group: "Procurement", icon: G("◇"),
-    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"], comingSoon: true },
-  { key: "wastage", label: "Wastage & adjustments", group: "Audit", icon: G("✕"),
-    requiredPermissions: ["inventory.write"], requiredModules: ["inventory"], comingSoon: true },
-  { key: "audits", label: "Stock audits", group: "Audit", icon: G("☑"),
-    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"], comingSoon: true },
+    requiredPermissions: ["inventory.read"], requiredModules: ["inventory"] },
+  { key: "vendor-ocr", label: "Vendor invoice OCR", group: "Procurement", icon: G("◫"),
+    requiredPermissions: ["inventory.write"], requiredModules: ["inventory"] },
+
+  { key: "wastage", label: "Wastage", group: "Audit", icon: G("✕"),
+    requiredPermissions: ["inventory.write"], requiredModules: ["inventory"] },
+
   { key: "reports", label: "Inventory reports", group: "Reports", icon: G("☷"),
-    requiredPermissions: ["reports.read"], requiredModules: ["inventory"], comingSoon: true },
+    requiredPermissions: ["reports.read"], requiredModules: ["inventory"] },
+  { key: "sync-center", label: "Sync Center", group: "System", icon: G("⟳"),
+    requiredPermissions: [] },
 ];
 
 const ACCOUNTANT_NAV: NavItem[] = [
-  { key: "daybook", label: "Daybook", group: "Accounts", icon: G("▦"),
-    requiredPermissions: ["accounts.read"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "ledger", label: "Ledger", group: "Accounts", icon: G("☰"),
-    requiredPermissions: ["accounts.read"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "tax", label: "Tax (GST / VAT)", group: "Compliance", icon: G("§"),
-    requiredPermissions: ["accounts.read"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "payouts", label: "Payouts", group: "Payments", icon: G("↥"),
-    requiredPermissions: ["payments.read"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "expenses", label: "Expenses", group: "Payments", icon: G("⊖"),
-    requiredPermissions: ["accounts.write"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "settlements", label: "Settlements", group: "Payments", icon: G("⇆"),
-    requiredPermissions: ["payments.read"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "statements", label: "Statements", group: "Reports", icon: G("☷"),
-    requiredPermissions: ["reports.read"], requiredModules: ["accounting"], comingSoon: true },
-  { key: "exports", label: "Export to Tally / Zoho", group: "Reports", icon: G("↧"),
-    requiredPermissions: ["reports.export"], requiredModules: ["accounting"], comingSoon: true },
+  { key: "payments", label: "Payments", group: "Daily", icon: G("⊟"),
+    requiredPermissions: ["payments.read"], requiredModules: ["accounting"] },
+  { key: "voucher", label: "Vouchers", group: "Daily", icon: G("⌧"),
+    requiredPermissions: ["accounts.write"], requiredModules: ["accounting"] },
+
+  { key: "expense-types", label: "Expense types", group: "Expenses", icon: G("☰"),
+    requiredPermissions: ["accounts.write"], requiredModules: ["accounting"] },
+  { key: "expenses", label: "Expenses", group: "Expenses", icon: G("⊖"),
+    requiredPermissions: ["accounts.write"], requiredModules: ["accounting"] },
+
+  { key: "cards", label: "Cards", group: "Banking", icon: G("▭"),
+    requiredPermissions: ["accounts.read"], requiredModules: ["accounting"] },
+  { key: "wallet", label: "Wallet", group: "Banking", icon: G("◫"),
+    requiredPermissions: ["accounts.read"], requiredModules: ["accounting"] },
+  { key: "bank-recon", label: "Bank reconciliation", group: "Banking", icon: G("⇆"),
+    requiredPermissions: ["accounts.write"], requiredModules: ["accounting"] },
+
+  { key: "refunds", label: "Refunds", group: "Adjustments", icon: G("↺"),
+    requiredPermissions: ["payments.refund"], requiredModules: ["accounting"] },
+  { key: "settlements", label: "Settlements", group: "Adjustments", icon: G("⇄"),
+    requiredPermissions: ["payments.read"], requiredModules: ["accounting"] },
+
+  { key: "accounting-reports", label: "Accounting reports", group: "Reports", icon: G("☷"),
+    requiredPermissions: ["reports.read"], requiredModules: ["accounting"] },
+  { key: "pos-report", label: "POS report", group: "Reports", icon: G("⊞"),
+    requiredPermissions: ["reports.read"], requiredModules: ["accounting"] },
+  { key: "work-period", label: "Work period report", group: "Reports", icon: G("⧗"),
+    requiredPermissions: ["reports.read"], requiredModules: ["accounting"] },
+  { key: "pnl", label: "Profit & loss", group: "Reports", icon: G("☷"),
+    requiredPermissions: ["reports.read"], requiredModules: ["accounting"] },
+  { key: "sync-center", label: "Sync Center", group: "System", icon: G("⟳"),
+    requiredPermissions: [] },
 ];
 
 const MARKETING_NAV: NavItem[] = [
-  { key: "segments", label: "Customer segments", group: "Audience", icon: G("◌"),
-    requiredPermissions: ["customers.read"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "leads", label: "Leads & enquiries", group: "Audience", icon: G("☎"),
-    requiredPermissions: ["customers.read"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "campaigns", label: "Campaigns", group: "Outreach", icon: G("✦"),
-    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "templates", label: "Templates (SMS · Email · WA)", group: "Outreach", icon: G("✉"),
-    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "loyalty", label: "Loyalty programs", group: "Loyalty", icon: G("✺"),
-    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "coupons", label: "Coupons & offers", group: "Loyalty", icon: G("◈"),
-    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "feedback", label: "Reviews & feedback", group: "Insights", icon: G("♡"),
-    requiredPermissions: ["customers.read"], requiredModules: ["marketing"], comingSoon: true },
-  { key: "reports", label: "Campaign reports", group: "Insights", icon: G("☷"),
-    requiredPermissions: ["reports.read"], requiredModules: ["marketing"], comingSoon: true },
+  { key: "growth-engine", label: "Growth engine", group: "Overview", icon: G("◎"),
+    requiredPermissions: ["marketing.read"], requiredModules: ["marketing"] },
+
+  { key: "campaigns", label: "Campaigns", group: "Campaigns", icon: G("✦"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "whatsapp-campaigns", label: "WhatsApp", group: "Campaigns", icon: G("☎"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "sms-campaigns", label: "SMS", group: "Campaigns", icon: G("✉"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "email-campaigns", label: "Email", group: "Campaigns", icon: G("✉"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "push-campaigns", label: "Push", group: "Campaigns", icon: G("▲"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+
+  { key: "templates", label: "Templates", group: "Templates", icon: G("☰"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "email-templates", label: "Email templates", group: "Templates", icon: G("✉"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "whatsapp-templates", label: "WhatsApp templates", group: "Templates", icon: G("☎"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+
+  { key: "coupons", label: "Coupons", group: "Offers", icon: G("◈"),
+    requiredPermissions: ["marketing.write"], requiredModules: ["marketing"] },
+  { key: "segments", label: "Customer segments", group: "Offers", icon: G("◌"),
+    requiredPermissions: ["customers.read"], requiredModules: ["marketing"] },
+
+  { key: "reviews", label: "Reviews", group: "Insights", icon: G("♡"),
+    requiredPermissions: ["customers.read"], requiredModules: ["marketing"] },
+
+  { key: "sync-center", label: "Sync Center", group: "System", icon: G("⟳"),
+    requiredPermissions: [] },
 ];
 
 const DELIVERY_NAV: NavItem[] = [
-  { key: "dispatch", label: "Dispatch board", group: "Dispatch", icon: G("▦"),
-    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"], comingSoon: true },
-  { key: "live", label: "Live tracking", group: "Dispatch", icon: G("◎"),
-    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"], comingSoon: true },
-  { key: "riders", label: "Riders & roster", group: "People", icon: G("☻"),
-    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"], comingSoon: true },
-  { key: "zones", label: "Zones & charges", group: "Setup", icon: G("◇"),
-    requiredPermissions: ["delivery.write"], requiredModules: ["delivery"], comingSoon: true },
-  { key: "aggregators", label: "Aggregator orders", group: "Channels", icon: G("⇄"),
-    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"], comingSoon: true },
-  { key: "reconcile", label: "Aggregator reconciliation", group: "Channels", icon: G("⇆"),
-    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"], comingSoon: true },
-  { key: "reports", label: "Delivery reports", group: "Reports", icon: G("☷"),
-    requiredPermissions: ["reports.read"], requiredModules: ["delivery"], comingSoon: true },
+  { key: "assignments", label: "Assigned orders", group: "Dispatch", icon: G("▦"),
+    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"] },
+  { key: "status-board", label: "Status board", group: "Dispatch", icon: G("⊞"),
+    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"] },
+  { key: "riders", label: "Riders", group: "Dispatch", icon: G("☻"),
+    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"] },
+
+  { key: "cod-collection", label: "COD collection", group: "Cash", icon: G("₹"),
+    requiredPermissions: ["delivery.read"], requiredModules: ["delivery"] },
+  { key: "cash-handover", label: "Cash handover", group: "Cash", icon: G("⇄"),
+    requiredPermissions: ["delivery.write"], requiredModules: ["delivery"] },
+
+  { key: "delivery-reports", label: "Delivery reports", group: "Reports", icon: G("☷"),
+    requiredPermissions: ["reports.read"], requiredModules: ["delivery"] },
+  { key: "sync-center", label: "Sync Center", group: "System", icon: G("⟳"),
+    requiredPermissions: [] },
 ];
 
 export const NAV_BY_WORKSPACE: Record<Exclude<WorkspaceKey, "cashier">, NavItem[]> = {

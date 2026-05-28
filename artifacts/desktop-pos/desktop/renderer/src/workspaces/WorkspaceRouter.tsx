@@ -21,6 +21,7 @@ import { ShiftOpenScreen } from "../screens/ShiftOpen";
 import type { WorkspaceHandoff } from "../screens/OrderWorkspace";
 import { DesktopShell } from "./DesktopShell";
 import { NAV_BY_WORKSPACE } from "./navConfigs";
+import { renderSpecialistModule } from "./specialist/router";
 import {
   WORKSPACES, availableWorkspaces, defaultWorkspace,
 } from "./roles";
@@ -149,12 +150,14 @@ export function WorkspaceRouter(props: Props) {
       availableWorkspaces={available}
       outletCount={outletCount}
       navItems={nav}
-      renderModule={active === "manager" ? makeManagerRenderer({
-        user,
-        selection: props.selection,
-        online: props.online,
-        navItems: nav,
-      }) : undefined}
+      renderModule={active === "manager"
+        ? makeManagerRenderer({
+            user,
+            selection: props.selection,
+            online: props.online,
+            navItems: nav,
+          })
+        : (item) => renderSpecialistModule(active, item)}
       onSwitchWorkspace={switchTo}
       onSwitchOutlet={props.onSwitchOutlet}
       onOpenSettings={props.onOpenSettings}

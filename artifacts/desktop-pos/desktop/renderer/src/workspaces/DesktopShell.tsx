@@ -125,6 +125,7 @@ export function DesktopShell(props: Props) {
   const [todaysSales, setTodaysSales] = useState<number | null>(null);
   const [shiftOpen, setShiftOpen] = useState<boolean | null>(null);
   const [printersConfigured, setPrintersConfigured] = useState<boolean | null>(null);
+  const [lowStockCount, setLowStockCount] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(() =>
     !!document.fullscreenElement);
   const [locked, setLocked] = useState(false);
@@ -140,7 +141,12 @@ export function DesktopShell(props: Props) {
     live: liveOrders ?? 0,
     hardware: failedPrints,
     integrations: failedPrints,
-  }), [liveOrders, newQrOrders, failedPrints]);
+    // Inventory specialist nav rail — low-stock count drives the "raw
+    // materials" badge so the rail mirrors the attention strip.
+    "raw-materials": lowStockCount,
+    "low-stock": lowStockCount,
+    "menu-item-stock": lowStockCount,
+  }), [liveOrders, newQrOrders, failedPrints, lowStockCount]);
 
   // Apply theme + density CSS vars (the same hook the cashier shell uses).
   useEffect(() => {
@@ -170,6 +176,24 @@ export function DesktopShell(props: Props) {
     void tick();
     const off = window.khanalagao?.failedPrints?.onChanged?.(tick);
     return () => { off?.(); };
+  }, []);
+
+  // Low-stock inventory badge — only polled for workspaces whose nav
+  // actually surfaces an inventory row, so we don't hammer IPC for
+  // cashier-only shells. Polls every 60s (slow-moving signal).
+  useEffect(() => {
+    const inv = window.khanalagao?.inv;
+    if (!inv) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const rows = await inv.list({ lowStock: true });
+        if (alive && Array.isArray(rows)) setLowStockCount(rows.length);
+      } catch { /* permission denied or warming up — leave at 0 */ }
+    };
+    void tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => { alive = false; window.clearInterval(id); };
   }, []);
 
   // Pending sync / conflict counts — mirror engine status.

@@ -948,6 +948,59 @@ export function registerApiIpc(opts: {
     return list[0] as PrintJobRecord;
   });
   handle("prints:list", ({ limit }): PrintJobRecord[] => D.listPrintJobs(limit));
+
+  // ─── Phase 6: specialist workspace handlers ─────────────────────────────
+  // Thin wrappers around the REST endpoints; all need an active restaurant.
+  handle("inv:list",     (q)        => client.invList(requireRestaurantId(), q ?? {}));
+  handle("inv:adjust",   ({ id, ...body }) => client.invAdjust(requireRestaurantId(), id, body));
+  handle("inv:transactions", ({ id, limit }) => client.invTx(requireRestaurantId(), id, limit));
+  handle("inv:waste-log",    ()    => client.invWasteLog(requireRestaurantId()));
+  handle("inv:suppliers",    ()    => client.invSuppliers(requireRestaurantId()));
+  handle("inv:supplier-create", (b) => client.invSupplierCreate(requireRestaurantId(), b));
+  handle("inv:purchase-orders", (q) => client.invPOList(requireRestaurantId(), q?.status));
+  handle("inv:purchase-order-create", (b) => client.invPOCreate(requireRestaurantId(), b));
+  handle("inv:purchase-order-receive", ({ id }) => client.invPOReceive(requireRestaurantId(), id));
+  handle("inv:menu-items-stock", async () => {
+    const bundle = await loadMenuBundle(requireRestaurantId()).catch(() => null);
+    return (bundle?.items ?? []) as unknown[];
+  });
+
+  handle("acc:expenses",        (q) => client.accExpenses(requireRestaurantId(), q ?? {}));
+  handle("acc:expense-create",  (b) => client.accExpenseCreate(requireRestaurantId(), b));
+  handle("acc:expense-categories", () => client.accExpenseCategories(requireRestaurantId()));
+  handle("acc:expense-category-create", (b) => client.accExpenseCategoryCreate(requireRestaurantId(), b));
+  handle("acc:payments-list",   (q) => client.accPayments(requireRestaurantId(), q ?? {}));
+  handle("acc:payments-summary",(q) => client.accPaymentsSummary(requireRestaurantId(), q ?? {}));
+  handle("acc:pnl",             (q) => client.accPnl(requireRestaurantId(), q ?? {}));
+  handle("acc:targets",         ()  => client.accTargets(requireRestaurantId()));
+
+  handle("mkt:campaigns",       (q) => client.mktCampaigns(requireRestaurantId(), q ?? {}));
+  handle("mkt:campaign-analytics", () => client.mktAnalytics(requireRestaurantId()));
+  handle("mkt:campaign-logs",   (q) => client.mktLogs(requireRestaurantId(), q?.limit));
+  handle("mkt:campaign-draft",  (b) => client.mktDraft(requireRestaurantId(), b ?? {}));
+  handle("mkt:templates",       ({ channel }) => client.mktTemplates(requireRestaurantId(), channel));
+  handle("mkt:reviews-feedback",(q) => client.mktReviewsFeedback(requireRestaurantId(), q?.limit));
+  handle("mkt:reviews-external",(q) => client.mktReviewsExternal(requireRestaurantId(), q?.limit));
+  handle("mkt:reviews-recovery",(q) => client.mktReviewsRecovery(requireRestaurantId(), q?.status));
+  handle("mkt:coupons-validate",({ code }) => client.mktCouponsValidate(requireRestaurantId(), code));
+  handle("mkt:customers",       (q) => client.mktCustomers(requireRestaurantId(), q ?? {}));
+
+  handle("del:assignments",     (q) => client.delAssignments(requireRestaurantId(), q?.status));
+  handle("del:executives",      ()  => client.delExecutives(requireRestaurantId()));
+  handle("del:assign",          (b) => client.delAssign(requireRestaurantId(), b));
+  handle("del:update-status",   ({ assignmentId, ...body }) =>
+    client.delUpdateStatus(requireRestaurantId(), assignmentId, body));
+  handle("del:proof",           ({ assignmentId, ...body }) =>
+    client.delProof(requireRestaurantId(), assignmentId, body));
+  handle("del:unavailable",     ({ assignmentId, ...body }) =>
+    client.delUnavailable(requireRestaurantId(), assignmentId, body));
+  handle("del:cod-collected",   ({ assignmentId }) =>
+    client.delCodCollected(requireRestaurantId(), assignmentId));
+  handle("del:cod-summary",     (q) => client.delCodSummary(requireRestaurantId(), q ?? {}));
+  handle("del:handovers",       (q) => client.delHandovers(requireRestaurantId(), q?.limit));
+  handle("del:handover-create", (b) => client.delHandoverCreate(requireRestaurantId(), b));
+  handle("del:aggregator-dashboard", () => client.delAggregatorDashboard(requireRestaurantId()));
+  handle("del:aggregator-sheets",    () => client.delAggregatorSheets(requireRestaurantId()));
 }
 
 function mapCash(r: D.CashMovementRow): CashMovementRecord {
@@ -1157,3 +1210,4 @@ function rollupKpis(sessionId: number, openedAt: string, orders: OrderHeader[]):
     generatedAt: new Date().toISOString(),
   };
 }
+

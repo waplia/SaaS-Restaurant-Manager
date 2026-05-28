@@ -834,6 +834,67 @@ export type IpcContract = {
     res: PrintJobRecord;
   };
   "prints:list": { req: { limit?: number }; res: PrintJobRecord[] };
+  // ─── Phase 6: specialist workspaces ────────────────────────────────────
+  // Loose JSON responses — renderer narrows per-screen DTOs.
+  "inv:list": { req: { lowStock?: boolean; search?: string }; res: unknown[] };
+  "inv:adjust": {
+    req: { id: number; type: "add" | "remove" | "use" | "waste" | "set";
+           quantity: number; notes?: string; batchNumber?: string; expiryDate?: string };
+    res: unknown;
+  };
+  "inv:transactions": { req: { id: number; limit?: number }; res: unknown[] };
+  "inv:waste-log": { req: void; res: unknown[] };
+  "inv:suppliers": { req: void; res: unknown[] };
+  "inv:supplier-create": { req: { name: string; phone?: string; email?: string; address?: string }; res: unknown };
+  "inv:purchase-orders": { req: { status?: string }; res: unknown[] };
+  "inv:purchase-order-create": {
+    req: { supplierId: number | null; notes?: string; expectedDate?: string;
+           items: Array<{ inventoryItemId: number; quantity: number; unitCost: number }> };
+    res: unknown;
+  };
+  "inv:purchase-order-receive": { req: { id: number }; res: unknown };
+  "inv:menu-items-stock": { req: void; res: unknown[] };
+
+  "acc:expenses": { req: { from?: string; to?: string; categoryId?: number; page?: number; limit?: number }; res: unknown };
+  "acc:expense-create": {
+    req: { categoryId: number; amount: number; expenseDate: string;
+           payee?: string; paymentMethod?: string; notes?: string };
+    res: unknown;
+  };
+  "acc:expense-categories": { req: void; res: unknown[] };
+  "acc:expense-category-create": { req: { name: string; categoryKind?: string; color?: string; icon?: string }; res: unknown };
+  "acc:payments-list": { req: { from?: string; to?: string; method?: string; page?: number; limit?: number }; res: unknown };
+  "acc:payments-summary": { req: { from?: string; to?: string }; res: unknown };
+  "acc:pnl": { req: { from?: string; to?: string }; res: unknown };
+  "acc:targets": { req: void; res: unknown };
+
+  "mkt:campaigns": { req: { status?: string; channel?: string; type?: string; goal?: string; q?: string }; res: unknown[] };
+  "mkt:campaign-analytics": { req: void; res: unknown };
+  "mkt:campaign-logs": { req: { limit?: number }; res: unknown[] };
+  "mkt:campaign-draft": { req: { name?: string; channel?: string; type?: string; goal?: string }; res: unknown };
+  "mkt:templates": { req: { channel: string }; res: unknown[] };
+  "mkt:reviews-feedback": { req: { limit?: number }; res: unknown[] };
+  "mkt:reviews-external": { req: { limit?: number }; res: unknown[] };
+  "mkt:reviews-recovery": { req: { status?: string }; res: unknown[] };
+  "mkt:coupons-validate": { req: { code: string }; res: unknown };
+  "mkt:customers": { req: { search?: string; limit?: number }; res: unknown[] };
+
+  "del:assignments": { req: { status?: string }; res: unknown[] };
+  "del:executives": { req: void; res: unknown[] };
+  "del:assign": { req: { orderId: number; riderId: number; notes?: string }; res: unknown };
+  "del:update-status": {
+    req: { assignmentId: number; status: "picked_up" | "delivered" | "cancelled";
+           codCollected?: boolean };
+    res: unknown;
+  };
+  "del:proof": { req: { assignmentId: number; proofPhotoUrl: string }; res: unknown };
+  "del:unavailable": { req: { assignmentId: number; reason: string }; res: unknown };
+  "del:cod-collected": { req: { assignmentId: number }; res: unknown };
+  "del:cod-summary": { req: { from?: string; to?: string }; res: unknown };
+  "del:handovers": { req: { limit?: number }; res: unknown[] };
+  "del:handover-create": { req: { riderId: number; amount: number; notes?: string }; res: unknown };
+  "del:aggregator-dashboard": { req: void; res: unknown };
+  "del:aggregator-sheets": { req: void; res: unknown[] };
 };
 
 // ─── Phase 5 — connectivity / sync ─────────────────────────────────────────
@@ -1001,9 +1062,88 @@ export interface KotPrintRequest {
   stationLabel?: string;
 }
 
-export type IpcChannel = keyof IpcContract;
-export type IpcReq<C extends IpcChannel> = IpcContract[C]["req"];
-export type IpcRes<C extends IpcChannel> = IpcContract[C]["res"];
+// ─── Phase 6: specialist workspaces (inventory / accounts / marketing / delivery) ──
+//
+// These IPC channels wrap existing REST endpoints. Responses are kept as
+// loose `unknown` records so the renderer can type its own DTOs without
+// adding a contract dependency for every field — the screens narrow the
+// shape at the call site.
+
+export type Json = unknown;
+export interface ListReq { search?: string; limit?: number; }
+export interface DateRangeReq { from?: string; to?: string; }
+
+export interface SpecialistIpc {
+  // Inventory ----------------------------------------------------------
+  "inv:list": { req: { lowStock?: boolean; search?: string }; res: Json[] };
+  "inv:adjust": {
+    req: { id: number; type: "add" | "remove" | "use" | "waste" | "set";
+           quantity: number; notes?: string; batchNumber?: string; expiryDate?: string };
+    res: Json;
+  };
+  "inv:transactions": { req: { id: number; limit?: number }; res: Json[] };
+  "inv:waste-log": { req: void; res: Json[] };
+  "inv:suppliers": { req: void; res: Json[] };
+  "inv:supplier-create": { req: { name: string; phone?: string; email?: string; address?: string }; res: Json };
+  "inv:purchase-orders": { req: { status?: string }; res: Json[] };
+  "inv:purchase-order-create": {
+    req: { supplierId: number | null; notes?: string; expectedDate?: string;
+           items: Array<{ inventoryItemId: number; quantity: number; unitCost: number }> };
+    res: Json;
+  };
+  "inv:purchase-order-receive": { req: { id: number }; res: Json };
+  "inv:menu-items-stock": { req: void; res: Json[] };
+
+  // Accounts -----------------------------------------------------------
+  "acc:expenses": { req: { from?: string; to?: string; categoryId?: number; page?: number; limit?: number }; res: Json };
+  "acc:expense-create": {
+    req: { categoryId: number; amount: number; expenseDate: string;
+           payee?: string; paymentMethod?: string; notes?: string };
+    res: Json;
+  };
+  "acc:expense-categories": { req: void; res: Json[] };
+  "acc:expense-category-create": { req: { name: string; categoryKind?: string; color?: string; icon?: string }; res: Json };
+  "acc:payments-list": { req: { from?: string; to?: string; method?: string; page?: number; limit?: number }; res: Json };
+  "acc:payments-summary": { req: { from?: string; to?: string }; res: Json };
+  "acc:pnl": { req: { from?: string; to?: string }; res: Json };
+  "acc:targets": { req: void; res: Json };
+
+  // Marketing ----------------------------------------------------------
+  "mkt:campaigns": { req: { status?: string; channel?: string; type?: string; goal?: string; q?: string }; res: Json[] };
+  "mkt:campaign-analytics": { req: void; res: Json };
+  "mkt:campaign-logs": { req: { limit?: number }; res: Json[] };
+  "mkt:campaign-draft": { req: { name?: string; channel?: string; type?: string; goal?: string }; res: Json };
+  "mkt:templates": { req: { channel: string }; res: Json[] };
+  "mkt:reviews-feedback": { req: { limit?: number }; res: Json[] };
+  "mkt:reviews-external": { req: { limit?: number }; res: Json[] };
+  "mkt:reviews-recovery": { req: { status?: string }; res: Json[] };
+  "mkt:coupons-validate": { req: { code: string; restaurantId: number }; res: Json };
+  "mkt:customers": { req: { search?: string; limit?: number }; res: Json[] };
+
+  // Delivery -----------------------------------------------------------
+  "del:assignments": { req: { status?: string }; res: Json[] };
+  "del:executives": { req: void; res: Json[] };
+  "del:assign": { req: { orderId: number; riderId: number; notes?: string }; res: Json };
+  "del:update-status": {
+    req: { assignmentId: number; status: "picked_up" | "delivered" | "cancelled";
+           codCollected?: boolean };
+    res: Json;
+  };
+  "del:proof": { req: { assignmentId: number; proofPhotoUrl: string }; res: Json };
+  "del:unavailable": { req: { assignmentId: number; reason: string }; res: Json };
+  "del:cod-collected": { req: { assignmentId: number }; res: Json };
+  "del:cod-summary": { req: DateRangeReq; res: Json };
+  "del:handovers": { req: { limit?: number }; res: Json[] };
+  "del:handover-create": { req: { riderId: number; amount: number; notes?: string }; res: Json };
+  "del:aggregator-dashboard": { req: void; res: Json };
+  "del:aggregator-sheets": { req: void; res: Json[] };
+}
+
+export type IpcContract2 = IpcContract & SpecialistIpc;
+
+export type IpcChannel = keyof IpcContract2;
+export type IpcReq<C extends IpcChannel> = IpcContract2[C]["req"];
+export type IpcRes<C extends IpcChannel> = IpcContract2[C]["res"];
 
 export type IpcEnvelope<T> = { ok: true; data: T } | { ok: false; error: string };
 
