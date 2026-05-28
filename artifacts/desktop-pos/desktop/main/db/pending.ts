@@ -13,7 +13,62 @@ export type PendingKind =
   | "orders:create"
   | "orders:add-items"
   | "orders:pay"
-  | "customers:create";
+  | "customers:create"
+  | "shift:cash-movement"
+  | "shift:expense"
+  | "stock:adjust"
+  | "prints:record"
+  | "audit:log";
+
+/** Category bucket surfaced by the Sync Center as a tab heading. Keep the
+ *  buckets stable — the renderer keys its counters off these strings. */
+export type PendingCategory =
+  | "shift"
+  | "orders"
+  | "payments"
+  | "prints"
+  | "expenses"
+  | "stock"
+  | "customers"
+  | "audit"
+  | "held_bills"
+  | "other";
+
+export function categoryFor(kind: string): PendingCategory {
+  if (kind === "shift:cash-movement") return "shift";
+  if (kind === "orders:create" || kind === "orders:add-items") return "orders";
+  if (kind === "orders:pay") return "payments";
+  if (kind === "customers:create") return "customers";
+  if (kind === "shift:expense") return "expenses";
+  if (kind === "stock:adjust") return "stock";
+  if (kind === "prints:record") return "prints";
+  if (kind === "audit:log") return "audit";
+  return "other";
+}
+
+/** Deterministic replay order: when the device reconnects we must drain
+ *  shift events first (so the till state is current), then orders, then
+ *  payments tied to those orders, then prints, then expenses & stock that
+ *  reference the just-synced orders, then the audit log last. Held bills
+ *  never sync (they are a local-only park) and `customers:create` is
+ *  remapped inline by the engine so its absolute position doesn't matter —
+ *  both sit at the tail. */
+const CATEGORY_PRIORITY: Record<PendingCategory, number> = {
+  shift: 0,
+  orders: 1,
+  payments: 2,
+  prints: 3,
+  expenses: 4,
+  stock: 5,
+  audit: 6,
+  customers: 7,
+  held_bills: 8,
+  other: 9,
+};
+
+export function priorityFor(kind: string): number {
+  return CATEGORY_PRIORITY[categoryFor(kind)];
+}
 
 export interface PendingOp {
   id: number;
@@ -97,6 +152,33 @@ export function pendingCount(): number {
     `SELECT COUNT(*) AS c FROM pending_operations WHERE status IN ('pending','failed','in-flight')`,
   ).get() as { c: number };
   return r.c;
+}
+
+/** Per-category counters for the Sync Center summary. Includes both pending
+ *  + conflict ops so the operator sees the total backlog per bucket. */
+export function countByCategory(): Record<PendingCategory, { pending: number; failed: number; conflicts: number }> {
+  const rows = getDb().prepare(
+    `SELECT kind, status, COUNT(*) AS c FROM pending_operations GROUP BY kind, status`,
+  ).all() as Array<{ kind: string; status: string; c: number }>;
+  const init: Record<PendingCategory, { pending: number; failed: number; conflicts: number }> = {
+    shift: { pending: 0, failed: 0, conflicts: 0 },
+    orders: { pending: 0, failed: 0, conflicts: 0 },
+    payments: { pending: 0, failed: 0, conflicts: 0 },
+    prints: { pending: 0, failed: 0, conflicts: 0 },
+    expenses: { pending: 0, failed: 0, conflicts: 0 },
+    stock: { pending: 0, failed: 0, conflicts: 0 },
+    customers: { pending: 0, failed: 0, conflicts: 0 },
+    audit: { pending: 0, failed: 0, conflicts: 0 },
+    held_bills: { pending: 0, failed: 0, conflicts: 0 },
+    other: { pending: 0, failed: 0, conflicts: 0 },
+  };
+  for (const r of rows) {
+    const cat = categoryFor(r.kind);
+    if (r.status === "conflict") init[cat].conflicts += r.c;
+    else if (r.status === "failed") init[cat].failed += r.c;
+    else init[cat].pending += r.c;
+  }
+  return init;
 }
 
 export function setStatus(id: number, status: PendingOp["status"], error?: string | null): void {

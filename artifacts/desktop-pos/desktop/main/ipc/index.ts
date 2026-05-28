@@ -20,7 +20,9 @@ import type {
   IpcChannel, IpcContract, IpcEnvelope, SessionSnapshot,
   OrderKotPayload, OrderBillPayload, MenuCategory, MenuItem,
   OrderDetailView, OrderHeader, ZReportSummary, ShiftKpis,
-  SyncStatusView, ConflictEntry, LocalStoreInfo,
+  SyncStatusView, ConflictEntry, LocalStoreInfo, ConflictDiff,
+  HeldBillRecord, CashMovementRecord, ExpenseRecord, StockActionRecord,
+  AuditLogRecord, PrintJobRecord, SyncLogEntry,
 } from "../../shared/ipc-contract";
 import { ApiClient, ApiError, type ApiRestaurantDetail } from "../api/client";
 import { sessionStore } from "../session-store";
@@ -31,8 +33,10 @@ import type { Connectivity } from "../sync/connectivity";
 import type { SyncEngine } from "../sync/engine";
 import { hydrateAll } from "../sync/hydrate";
 import * as P from "../db/pending";
+import * as D from "../db/domain";
 import { dbStats, resetDb, getDb } from "../db";
 import { countAll, kvGet, kvSet } from "../db/queries";
+import { randomUUID } from "node:crypto";
 
 /** Z-report cache contract — implemented in `main/index.ts` against
  *  electron-store with a 30-day retention sweep on every write. */
@@ -174,9 +178,47 @@ export function registerApiIpc(opts: {
 
   // ─── Auth ────────────────────────────────────────────────────────────
   handle("auth:login", async ({ identifier, password, rememberDevice }) => {
+    // Offline login gate (Phase 5+): only allowed when the device has
+    // previously authenticated AND the typed password verifies against a
+    // locally cached scrypt hash of the last password the same cashier
+    // used online. A first-time login (or a password we never captured)
+    // must hit the server. Identifier-match alone is *not* sufficient —
+    // otherwise anyone who knows a cashier's email could unlock the till.
+    if (!connectivity.current().online) {
+      const cachedUser = sessionStore.getUser();
+      const { refreshToken } = sessionStore.getTokens();
+      const cred = sessionStore.getOfflineCredential();
+      if (!cachedUser || !refreshToken || !cred) {
+        throw new Error("First-time sign in requires an internet connection.");
+      }
+      const typedIdentifier = String(identifier ?? "");
+      const typedPassword = String(password ?? "");
+      if (!sessionStore.verifyOfflineCredential(typedIdentifier, typedPassword)) {
+        // Audit the failure so a brute-force attempt is visible the next
+        // time the device is online. Identifier is logged lowercase, the
+        // password is NEVER stored or logged.
+        D.insertAuditLog({
+          at: Date.now(), actor: cachedUser.email ?? cachedUser.name,
+          action: "auth:offline-login-denied", target: null,
+          details: { identifier: typedIdentifier.trim().toLowerCase() },
+        });
+        throw new Error("Offline sign in failed — wrong identifier or password.");
+      }
+      D.insertAuditLog({
+        at: Date.now(), actor: cachedUser.email ?? cachedUser.name,
+        action: "auth:offline-login", target: null,
+        details: { identifier: typedIdentifier.trim().toLowerCase() },
+      });
+      return { user: cachedUser };
+    }
     const r = await client.login(identifier, password);
     sessionStore.setTokens(r.accessToken, r.refreshToken);
     sessionStore.setUser(r.user);
+    // Cache a scrypt hash of the just-verified password so the same
+    // cashier can sign in offline next time the network drops. The
+    // server has already validated the credentials at this point — we
+    // are simply mirroring the check locally for future replays.
+    sessionStore.setOfflineCredential(identifier, password);
     sessionStore.patchSelection({ rememberDevice: !!rememberDevice });
     if (r.user.restaurantId && !sessionStore.getSelection().restaurantId) {
       sessionStore.patchSelection({ restaurantId: r.user.restaurantId });
@@ -503,27 +545,53 @@ export function registerApiIpc(opts: {
   });
 
   // ─── Phase 4: payments / split ───────────────────────────────────────
+  // Offline guard: non-cash payment provider calls (Stripe, Razorpay,
+  // card-on-terminal) require a live network round-trip — there is no
+  // safe local replay because the cashier is waiting on a tap/swipe/UPI
+  // confirmation in real time. Surface a clean message instead of letting
+  // the API call fail later with a generic network error.
+  function requireOnline(label: string): void {
+    if (!connectivity.current().online) {
+      throw new Error(`${label} requires an internet connection.`);
+    }
+  }
+
+  /** Trusted-layer permission gate. The renderer UI also hides these
+   *  actions for non-managers, but a malicious renderer / dev-tools call
+   *  must not be able to bypass them — so we re-check here in the main
+   *  process before mutating local state. */
+  function requireManager(label: string): void {
+    const role = (sessionStore.getUser()?.role ?? "").toLowerCase();
+    if (role !== "owner" && role !== "manager" && role !== "admin") {
+      throw new Error(`${label} requires manager or owner permission.`);
+    }
+  }
+
   handle("payments:record", () => { throw new Error("payments:record deprecated — use orders:pay"); });
 
   handle("payments:stripe-intent", async ({ orderId, customAmount, tipAmount }) => {
+    requireOnline("Card payment");
     return client.createStripeIntent(requireRestaurantId(), Number(orderId), {
       customAmount, tipAmount,
     });
   });
 
   handle("payments:razorpay-order", async ({ orderId, customAmount, tipAmount }) => {
+    requireOnline("UPI / Razorpay payment");
     return client.createRazorpayOrder(requireRestaurantId(), Number(orderId), {
       customAmount, tipAmount,
     });
   });
 
   handle("payments:terminal-charge", async ({ terminalDeviceId, orderId, amount, tipAmount }) => {
+    requireOnline("Card terminal charge");
     return client.terminalCharge(requireRestaurantId(), Number(terminalDeviceId), {
       orderId: Number(orderId), amount: Number(amount), tipAmount,
     });
   });
 
   handle("payments:terminal-confirm", async ({ terminalDeviceId, orderId, paymentIntentId }) => {
+    requireOnline("Card terminal confirmation");
     return client.terminalConfirm(requireRestaurantId(), Number(terminalDeviceId), {
       orderId: Number(orderId), paymentIntentId,
     });
@@ -609,11 +677,13 @@ export function registerApiIpc(opts: {
   // ─── Phase 5 — connectivity / sync / local cache ─────────────────────
   function buildSyncStatusView(): SyncStatusView {
     const s = syncEngine.status();
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId ?? null;
     return Offline.buildSyncStatus(
       connectivity.current().online,
       s.draining,
       s.lastRunAt,
       s.lastError,
+      { restaurantId: rid },
     );
   }
 
@@ -656,6 +726,216 @@ export function registerApiIpc(opts: {
     await hydrateAll(client, rid);
     return { ok: true as const };
   });
+
+  // ─── Sync Center extensions ────────────────────────────────────────────
+  handle("sync:conflicts:diff", ({ id }): ConflictDiff => {
+    const op = P.getOp(Number(id));
+    if (!op) throw new Error("Conflict not found.");
+    // The conflicts table holds the engine-captured server response; the
+    // pending op still carries the local payload that triggered it.
+    const conflicts = P.listConflicts().filter((c) => c.opId === op.id);
+    const conflict = conflicts[0];
+    let serverBody: unknown = null;
+    let status: number | null = null;
+    let message: string | null = conflict?.details ?? op.lastError ?? null;
+    // listConflicts only exposes the summary; for the full server body we
+    // re-read the conflicts table directly.
+    const row = getDb().prepare(
+      `SELECT details FROM conflicts WHERE op_id=? ORDER BY captured_at DESC LIMIT 1`,
+    ).get(op.id) as { details: string | null } | undefined;
+    if (row?.details) {
+      try {
+        const parsed = JSON.parse(row.details) as { status?: number; body?: unknown };
+        status = typeof parsed.status === "number" ? parsed.status : null;
+        serverBody = parsed.body ?? null;
+      } catch { /* keep null */ }
+    }
+    return {
+      id: conflict?.id ?? -1, opId: op.id, kind: op.kind,
+      summary: conflict?.summary ?? op.kind,
+      capturedAt: conflict?.capturedAt ?? op.createdAt,
+      local: op.payload, server: { status, body: serverBody }, message,
+    };
+  });
+
+  handle("sync:logs", ({ limit }): SyncLogEntry[] => {
+    return D.listSyncLog(Math.min(500, Math.max(1, Number(limit) || 200)));
+  });
+
+  handle("sync:clear-cache", ({ confirm }) => {
+    requireManager("Clearing the local cache");
+    if (!confirm) throw new Error("sync:clear-cache requires { confirm: true }");
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId;
+    if (!rid) throw new Error("Pick a restaurant first.");
+    D.clearSafeCache(rid);
+    invalidateMenu(rid);
+    D.insertAuditLog({
+      at: Date.now(), actor: sessionStore.getUser()?.email ?? null,
+      action: "sync:clear-cache", target: String(rid), details: null,
+    });
+    const stats = dbStats();
+    return {
+      path: stats.path, sizeBytes: stats.sizeBytes,
+      counts: countAll(),
+      hydrateLastAt: Number(kvGet(`hydrate:lastAt:${rid}`) ?? "0") || null,
+    };
+  });
+
+  // ─── Held bills (mirror of renderer's parked carts) ────────────────────
+  handle("held-bills:list", (): HeldBillRecord[] => {
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId ?? null;
+    if (rid == null) return [];
+    const branchId = currentBranchId();
+    const rows = D.listHeldBills(rid, branchId);
+    return rows.map((r) => {
+      const p = (r.payload ?? {}) as Partial<HeldBillRecord>;
+      return {
+        id: r.id, label: r.label, createdAt: r.createdAt,
+        orderType: (p.orderType ?? "dine_in") as HeldBillRecord["orderType"],
+        tableId: p.tableId ?? null, tableLabel: p.tableLabel ?? null,
+        customerName: p.customerName ?? null, customerPhone: p.customerPhone ?? null,
+        cashier: r.cashier, note: p.note ?? null,
+        lines: p.lines ?? [],
+      };
+    });
+  });
+  handle("held-bills:save", (bill): HeldBillRecord => {
+    const rid = requireRestaurantId();
+    D.upsertHeldBill({
+      id: bill.id, restaurantId: rid, branchId: currentBranchId(),
+      counterId: sessionStore.getSelection().counterId,
+      label: bill.label, cashier: bill.cashier ?? null,
+      createdAt: bill.createdAt, payload: bill,
+    });
+    return bill;
+  });
+  handle("held-bills:remove", ({ id }) => { D.removeHeldBill(String(id)); return true as const; });
+  handle("held-bills:clear", () => {
+    const rid = sessionStore.getSelection().restaurantId ?? sessionStore.getUser()?.restaurantId ?? null;
+    if (rid != null) D.clearHeldBills(rid);
+    return true as const;
+  });
+
+  // ─── Shift cash movements / expenses / stock / audit / prints ──────────
+  function currentCashier(): string | null {
+    const u = sessionStore.getUser();
+    return u?.email ?? u?.name ?? null;
+  }
+  function currentSessionId(): number | null {
+    return sessionStore.getOpenSession().id ?? null;
+  }
+
+  handle("shift:cash-movement", (req): CashMovementRecord => {
+    if (!Number.isFinite(req.amount) || req.amount <= 0) throw new Error("Amount must be positive.");
+    if (req.kind !== "in" && req.kind !== "out") throw new Error("kind must be 'in' or 'out'");
+    const rid = requireRestaurantId();
+    const id = `cm_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const row = D.insertCashMovement({
+      id, restaurantId: rid, branchId: currentBranchId(),
+      sessionId: req.sessionId ?? currentSessionId(), kind: req.kind,
+      amount: Number(req.amount), reason: req.reason ?? null,
+      cashier: currentCashier(), at: Date.now(),
+    });
+    P.enqueue({
+      kind: "shift:cash-movement", idempotencyKey: id,
+      payload: { localId: id, sessionId: row.sessionId, kind: row.kind, amount: row.amount, reason: row.reason, cashier: row.cashier, at: row.at },
+    });
+    void syncEngine.drain();
+    return mapCash(row);
+  });
+  handle("shift:list-cash-movements", ({ sessionId, limit }): CashMovementRecord[] => {
+    const rid = requireRestaurantId();
+    return D.listCashMovements(rid, { sessionId: sessionId ?? null, limit }).map(mapCash);
+  });
+
+  handle("shift:expense", (req): ExpenseRecord => {
+    if (!Number.isFinite(req.amount) || req.amount <= 0) throw new Error("Amount must be positive.");
+    const rid = requireRestaurantId();
+    const id = `ex_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const row = D.insertExpense({
+      id, restaurantId: rid, branchId: currentBranchId(),
+      sessionId: req.sessionId ?? currentSessionId(),
+      category: req.category ?? null, amount: Number(req.amount),
+      reason: req.reason ?? null, cashier: currentCashier(), at: Date.now(),
+    });
+    P.enqueue({
+      kind: "shift:expense", idempotencyKey: id,
+      payload: { localId: id, sessionId: row.sessionId, category: row.category, amount: row.amount, reason: row.reason, cashier: row.cashier, at: row.at },
+    });
+    void syncEngine.drain();
+    return mapExpense(row);
+  });
+  handle("shift:list-expenses", ({ sessionId, limit }): ExpenseRecord[] => {
+    const rid = requireRestaurantId();
+    return D.listExpenses(rid, { sessionId: sessionId ?? null, limit }).map(mapExpense);
+  });
+
+  handle("stock:adjust", (req): StockActionRecord => {
+    requireManager("Adjusting stock");
+    if (!Number.isFinite(req.quantity)) throw new Error("Quantity required.");
+    const rid = requireRestaurantId();
+    const id = `st_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const row = D.insertStockAction({
+      id, restaurantId: rid, branchId: currentBranchId(),
+      menuItemId: req.menuItemId ?? null, ingredientId: req.ingredientId ?? null,
+      kind: req.kind, quantity: Number(req.quantity), unit: req.unit ?? null,
+      reason: req.reason ?? null, cashier: currentCashier(), at: Date.now(),
+    });
+    P.enqueue({
+      kind: "stock:adjust", idempotencyKey: id,
+      payload: { localId: id, menuItemId: row.menuItemId, ingredientId: row.ingredientId, kind: row.kind, quantity: row.quantity, unit: row.unit, reason: row.reason },
+    });
+    void syncEngine.drain();
+    return mapStock(row);
+  });
+  handle("stock:list-actions", ({ limit }): StockActionRecord[] => {
+    const rid = requireRestaurantId();
+    return D.listStockActions(rid, { limit }).map(mapStock);
+  });
+
+  handle("audit:log", (req): AuditLogRecord => {
+    const at = Date.now();
+    const actor = currentCashier();
+    const row = D.insertAuditLog({ at, actor, action: req.action, target: req.target ?? null, details: req.details ?? null });
+    P.enqueue({
+      kind: "audit:log", idempotencyKey: `au_${row.id}_${at}`,
+      payload: { localId: row.id, action: row.action, target: row.target, details: row.details, at: row.at, actor: row.actor },
+    });
+    void syncEngine.drain();
+    return mapAudit(row);
+  });
+  handle("audit:list", ({ limit, sinceMs }): AuditLogRecord[] => {
+    return D.listAuditLog({ limit, sinceMs }).map(mapAudit);
+  });
+
+  handle("prints:record", (req): PrintJobRecord => {
+    D.recordPrintJob({
+      id: String(req.id), kind: req.kind, orderId: req.orderId ?? null,
+      printerName: req.printerName ?? null, status: req.status,
+      at: Date.now(), lastError: req.lastError ?? null, payload: req.payload ?? null,
+    });
+    P.enqueue({
+      kind: "prints:record", idempotencyKey: String(req.id),
+      payload: { id: String(req.id), kind: req.kind, orderId: req.orderId ?? null, status: req.status, at: Date.now(), lastError: req.lastError ?? null },
+    });
+    void syncEngine.drain();
+    const list = D.listPrintJobs(1);
+    return list[0] as PrintJobRecord;
+  });
+  handle("prints:list", ({ limit }): PrintJobRecord[] => D.listPrintJobs(limit));
+}
+
+function mapCash(r: D.CashMovementRow): CashMovementRecord {
+  return { id: r.id, sessionId: r.sessionId, kind: r.kind, amount: r.amount, reason: r.reason, cashier: r.cashier, at: r.at, syncedAt: r.syncedAt };
+}
+function mapExpense(r: D.ExpenseRow): ExpenseRecord {
+  return { id: r.id, sessionId: r.sessionId, category: r.category, amount: r.amount, reason: r.reason, cashier: r.cashier, at: r.at, syncedAt: r.syncedAt };
+}
+function mapStock(r: D.StockActionRow): StockActionRecord {
+  return { id: r.id, menuItemId: r.menuItemId, ingredientId: r.ingredientId, kind: r.kind, quantity: r.quantity, unit: r.unit, reason: r.reason, cashier: r.cashier, at: r.at, syncedAt: r.syncedAt };
+}
+function mapAudit(r: D.AuditLogRow): AuditLogRecord {
+  return { id: r.id, at: r.at, actor: r.actor, action: r.action, target: r.target, details: r.details, syncedAt: r.syncedAt };
 }
 
 // ─── Payload builders (API → ESC/POS DTO) ──────────────────────────────────

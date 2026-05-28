@@ -222,6 +222,8 @@ export function countAll(): Record<string, number> {
     "pending_operations", "conflicts",
     "settings", "terminals", "kitchens", "discount_rules", "modifier_groups",
     "sync_log", "z_reports",
+    "held_bills", "cash_movements", "expenses", "stock_actions",
+    "audit_log", "print_jobs",
   ]) {
     const r = getDb().prepare(`SELECT COUNT(*) AS c FROM ${t}`).get() as { c: number };
     out[t] = r.c;

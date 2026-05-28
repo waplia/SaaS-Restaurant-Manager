@@ -201,6 +201,10 @@ const api = {
     listConflicts: () => invoke("sync:conflicts:list"),
     resolveConflict: (req: IpcContract["sync:conflicts:resolve"]["req"]) =>
       invoke("sync:conflicts:resolve", req),
+    diffConflict: (req: IpcContract["sync:conflicts:diff"]["req"]) =>
+      invoke("sync:conflicts:diff", req),
+    logs: (req?: IpcContract["sync:logs"]["req"]) => invoke("sync:logs", req ?? {}),
+    clearCache: () => invoke("sync:clear-cache", { confirm: true }),
     onStatusChanged: (cb: () => void) => {
       const listener = () => cb();
       ipcRenderer.on("sync:status-changed", listener);
@@ -211,6 +215,34 @@ const api = {
     info: () => invoke("local:info"),
     reset: () => invoke("local:reset", { confirm: true }),
     hydrate: () => invoke("local:hydrate"),
+  },
+  heldBills: {
+    list: () => invoke("held-bills:list"),
+    save: (req: IpcContract["held-bills:save"]["req"]) => invoke("held-bills:save", req),
+    remove: (req: IpcContract["held-bills:remove"]["req"]) => invoke("held-bills:remove", req),
+    clear: () => invoke("held-bills:clear"),
+  },
+  shift: {
+    cashMovement: (req: IpcContract["shift:cash-movement"]["req"]) =>
+      invoke("shift:cash-movement", req),
+    listCashMovements: (req?: IpcContract["shift:list-cash-movements"]["req"]) =>
+      invoke("shift:list-cash-movements", req ?? {}),
+    expense: (req: IpcContract["shift:expense"]["req"]) => invoke("shift:expense", req),
+    listExpenses: (req?: IpcContract["shift:list-expenses"]["req"]) =>
+      invoke("shift:list-expenses", req ?? {}),
+  },
+  stock: {
+    adjust: (req: IpcContract["stock:adjust"]["req"]) => invoke("stock:adjust", req),
+    listActions: (req?: IpcContract["stock:list-actions"]["req"]) =>
+      invoke("stock:list-actions", req ?? {}),
+  },
+  audit: {
+    log: (req: IpcContract["audit:log"]["req"]) => invoke("audit:log", req),
+    list: (req?: IpcContract["audit:list"]["req"]) => invoke("audit:list", req ?? {}),
+  },
+  printsJournal: {
+    record: (req: IpcContract["prints:record"]["req"]) => invoke("prints:record", req),
+    list: (req?: IpcContract["prints:list"]["req"]) => invoke("prints:list", req ?? {}),
   },
 } as const;
 

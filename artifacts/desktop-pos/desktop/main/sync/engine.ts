@@ -21,11 +21,15 @@ import { EventEmitter } from "node:events";
 import type { ApiClient } from "../api/client";
 import { ApiError } from "../api/client";
 import {
-  listPending, setStatus, removeOp, recordConflict, remapLocalOrderId,
+  listPending, priorityFor, setStatus, removeOp, recordConflict, remapLocalOrderId,
   remapLocalCustomerId, pendingCount, getOp, patchPayload,
 } from "../db/pending";
 import type { PendingOp } from "../db/pending";
 import { remapOrderId, upsertOrder, upsertCustomers, deleteCustomerById } from "../db/queries";
+import {
+  markCashSynced, markExpenseSynced, markStockSynced, markAuditSynced,
+  appendSyncLog,
+} from "../db/domain";
 import type {
   CreateOrderRequest, OrderDetailView, CartItemInput, PayMethod,
 } from "../../shared/ipc-contract";
@@ -103,7 +107,19 @@ export class SyncEngine extends EventEmitter {
     this.emit("status", this.status());
     try {
       while (this.isOnline()) {
-        const queue = listPending().filter((op) => op.status !== "conflict");
+        // Deterministic replay order: drain in category priority order
+        // (shift → orders → payments → prints → expenses → stock → audit →
+        // customers), oldest first within a category. FIFO alone could pop
+        // a stock adjustment ahead of the order that justifies it.
+        const queue = listPending()
+          .filter((op) => op.status !== "conflict")
+          .sort((a, b) => {
+            const pa = priorityFor(a.kind);
+            const pb = priorityFor(b.kind);
+            if (pa !== pb) return pa - pb;
+            if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+            return a.id - b.id;
+          });
         if (queue.length === 0) { this.lastError = null; break; }
         const op = queue[0];
         // Guard: a dependent op (negative orderId or localCustomerId still
@@ -117,9 +133,14 @@ export class SyncEngine extends EventEmitter {
           removeOp(op.id);
           this.lastError = null;
           this.backoffMs = 0;
+          appendSyncLog({ at: Date.now(), kind: op.kind, opId: op.id, outcome: "synced", details: null });
         } catch (err) {
           if (err instanceof ApiError && isConflictStatus(err.status)) {
             recordConflict(op.id, op.kind, err.message, { status: err.status, body: err.body });
+            appendSyncLog({
+              at: Date.now(), kind: op.kind, opId: op.id, outcome: "conflict",
+              details: JSON.stringify({ status: err.status, message: err.message }),
+            });
             // Cascade: any pending op that still depends on this parent
             // (negative orderId / customerId remap pending) would otherwise
             // sit at the head of the queue forever. Surface them as
@@ -131,6 +152,10 @@ export class SyncEngine extends EventEmitter {
             break;
           }
           setStatus(op.id, "failed", (err as Error).message);
+          appendSyncLog({
+            at: Date.now(), kind: op.kind, opId: op.id, outcome: "failed",
+            details: (err as Error).message,
+          });
           this.lastError = (err as Error).message;
           this.backoffMs = Math.min(60_000, (this.backoffMs || 1_000) * 2);
           this.emit("status", this.status());
@@ -234,10 +259,84 @@ export class SyncEngine extends EventEmitter {
         }
         break;
       }
+      case "shift:cash-movement": {
+        const body = op.payload as { localId: string; sessionId: number | null; kind: "in" | "out"; amount: number; reason: string | null; cashier: string | null; at: number };
+        const server = await postWithFallback(this.client, `/api/restaurants/${restaurantId}/cash-movements`, {
+          sessionId: body.sessionId, kind: body.kind, amount: body.amount,
+          reason: body.reason, idempotencyKey: op.idempotencyKey,
+        });
+        markCashSynced(body.localId, server?.id ?? null);
+        break;
+      }
+      case "shift:expense": {
+        const body = op.payload as { localId: string; sessionId: number | null; category: string | null; amount: number; reason: string | null; cashier: string | null; at: number };
+        const server = await postWithFallback(this.client, `/api/restaurants/${restaurantId}/expenses`, {
+          sessionId: body.sessionId, category: body.category, amount: body.amount,
+          reason: body.reason, idempotencyKey: op.idempotencyKey,
+        });
+        markExpenseSynced(body.localId, server?.id ?? null);
+        break;
+      }
+      case "stock:adjust": {
+        const body = op.payload as { localId: string; menuItemId: number | null; ingredientId: number | null; kind: string; quantity: number; unit: string | null; reason: string | null };
+        const server = await postWithFallback(this.client, `/api/restaurants/${restaurantId}/stock-actions`, {
+          menuItemId: body.menuItemId, ingredientId: body.ingredientId,
+          kind: body.kind, quantity: body.quantity, unit: body.unit,
+          reason: body.reason, idempotencyKey: op.idempotencyKey,
+        });
+        markStockSynced(body.localId, server?.id ?? null);
+        break;
+      }
+      case "prints:record": {
+        // Print-job journal is informational on the server (audit-trail).
+        // Treat a missing endpoint as success so the local journal isn't held
+        // hostage by a server feature that may not be deployed yet.
+        const body = op.payload as { id: string; kind: string; orderId: number | null; status: string; at: number; lastError: string | null };
+        await postWithFallback(this.client, `/api/restaurants/${restaurantId}/print-jobs`, {
+          jobId: body.id, kind: body.kind, orderId: body.orderId,
+          status: body.status, at: body.at, lastError: body.lastError,
+          idempotencyKey: op.idempotencyKey,
+        });
+        break;
+      }
+      case "audit:log": {
+        const body = op.payload as { localId: number; action: string; target: string | null; details: unknown; at: number; actor: string | null };
+        const server = await postWithFallback(this.client, `/api/restaurants/${restaurantId}/audit-log`, {
+          action: body.action, target: body.target, details: body.details,
+          at: body.at, actor: body.actor, idempotencyKey: op.idempotencyKey,
+        });
+        markAuditSynced(body.localId, server?.id ?? null);
+        break;
+      }
       default:
-        throw new Error(`Unknown pending op kind: ${op.kind}`);
+        throw new Error(`Unknown pending op kind: ${(op as PendingOp).kind}`);
     }
   }
+}
+
+/**
+ * POST against an operational endpoint. Returns the parsed body on 2xx and
+ * surfaces every error (including 404) so the engine's normal failed /
+ * conflict / retry path handles it. A previous version treated 404 as a
+ * soft success — that's been removed because it silently dropped local
+ * cash / expense / stock / audit / print rows when an endpoint was
+ * misconfigured or undeployed. Operational data must be visible in the
+ * Sync Center until the operator resolves it.
+ */
+async function postWithFallback(
+  client: ApiClient,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<{ id?: number } | null> {
+  const generic = client as unknown as {
+    request<T>(p: string, opts: { method?: string; body?: unknown; headers?: Record<string, string> }): Promise<T>;
+  };
+  if (typeof generic.request !== "function") {
+    // No request method on the wired client — surface as a hard failure so
+    // the operator sees the queue grow instead of silently losing rows.
+    throw new Error(`Sync endpoint not wired: ${path}`);
+  }
+  return await generic.request<{ id?: number }>(path, { method: "POST", body });
 }
 
 function isReady(op: PendingOp): boolean {

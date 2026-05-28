@@ -22,6 +22,7 @@ import { ApiError } from "../api/client";
 import type { ApiClient } from "../api/client";
 import * as Q from "../db/queries";
 import * as P from "../db/pending";
+import * as D from "../db/domain";
 import { kvGet, kvSet, nextLocalId, upsertOrder, getOrder } from "../db/queries";
 import type {
   MenuCategory, MenuItem, FloorTable, CustomerSummary,
@@ -515,18 +516,30 @@ export async function payOrder(
 }
 
 // ─── Sync status assembly ─────────────────────────────────────────────────
-export function buildSyncStatus(online: boolean, draining: boolean, lastRunAt: number | null, lastError: string | null): import("../../shared/ipc-contract").SyncStatusView {
+export function buildSyncStatus(
+  online: boolean, draining: boolean, lastRunAt: number | null, lastError: string | null,
+  ctx?: { restaurantId?: number | null },
+): import("../../shared/ipc-contract").SyncStatusView {
   const pendings = P.listAll();
   const head = pendings.filter((p) => p.status !== "conflict").slice(0, 25).map((p) => ({
     id: p.id, kind: p.kind, status: p.status, attempts: p.attempts,
     createdAt: p.createdAt, summary: describeOp(p),
     lastError: p.lastError,
   }));
+  const categories = P.countByCategory();
+  // Held bills are a local-only park (never sent to backend). Surface
+  // their count in the Sync Center "held_bills" bucket so the operator
+  // sees the outstanding total alongside the real sync queue.
+  const rid = ctx?.restaurantId ?? null;
+  if (rid != null) {
+    categories.held_bills = { pending: D.heldBillCount(rid), failed: 0, conflicts: 0 };
+  }
   return {
     online, draining,
     pending: pendings.filter((p) => p.status !== "conflict").length,
     conflicts: pendings.filter((p) => p.status === "conflict").length,
     lastRunAt, lastError, queue: head,
+    categories,
   };
 }
 
@@ -541,6 +554,25 @@ function describeOp(p: P.PendingOp): string {
       return `Cash payment on order #${(payload?.orderId as number | undefined) ?? "?"}`;
     case "customers:create":
       return `New customer ${(payload?.name as string | undefined) ?? ""}`.trim();
+    case "shift:cash-movement": {
+      const kind = (payload?.kind as string | undefined) ?? "in/out";
+      const amount = (payload?.amount as number | undefined) ?? 0;
+      return `Cash ${kind} · ₹${amount}`;
+    }
+    case "shift:expense": {
+      const amount = (payload?.amount as number | undefined) ?? 0;
+      const reason = (payload?.reason as string | undefined) ?? "expense";
+      return `Expense · ₹${amount} · ${reason}`;
+    }
+    case "stock:adjust": {
+      const kind = (payload?.kind as string | undefined) ?? "adjust";
+      const qty = (payload?.quantity as number | undefined) ?? 0;
+      return `Stock ${kind} · ${qty}`;
+    }
+    case "prints:record":
+      return `Print log · ${(payload?.kind as string | undefined) ?? ""}`.trim();
+    case "audit:log":
+      return `Audit · ${(payload?.action as string | undefined) ?? ""}`.trim();
     default:
       return p.kind;
   }

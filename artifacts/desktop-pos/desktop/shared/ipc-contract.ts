@@ -755,9 +755,75 @@ export type IpcContract = {
   "sync:run-now": { req: void; res: SyncStatusView };
   "sync:conflicts:list": { req: void; res: ConflictEntry[] };
   "sync:conflicts:resolve": { req: { id: number; action: "discard" | "retry" | "skip" }; res: ConflictEntry[] };
+  /** Side-by-side payload vs server response for a single conflict. */
+  "sync:conflicts:diff": { req: { id: number }; res: ConflictDiff };
+  /** Recent sync log entries (oldest-first capped). */
+  "sync:logs": { req: { limit?: number }; res: SyncLogEntry[] };
+  /** Drop reference cache (menu/tables/customers/etc.) while preserving the
+   *  pending queue, conflicts, audit log, expenses, stock actions and held
+   *  bills. Returns the post-clear local-store snapshot. */
+  "sync:clear-cache": { req: { confirm: true }; res: LocalStoreInfo };
   "local:info": { req: void; res: LocalStoreInfo };
   "local:reset": { req: { confirm: true }; res: LocalStoreInfo };
   "local:hydrate": { req: void; res: { ok: true } };
+
+  // Held bills — durable mirror of the renderer's parked carts. ------------
+  "held-bills:list": { req: void; res: HeldBillRecord[] };
+  "held-bills:save": { req: HeldBillRecord; res: HeldBillRecord };
+  "held-bills:remove": { req: { id: string }; res: true };
+  "held-bills:clear": { req: void; res: true };
+
+  // Shift actions / expenses / stock / audit / print jobs ------------------
+  "shift:cash-movement": {
+    req: { kind: "in" | "out"; amount: number; reason?: string | null; sessionId?: number | null };
+    res: CashMovementRecord;
+  };
+  "shift:list-cash-movements": {
+    req: { sessionId?: number | null; limit?: number };
+    res: CashMovementRecord[];
+  };
+  "shift:expense": {
+    req: { amount: number; reason?: string | null; category?: string | null; sessionId?: number | null };
+    res: ExpenseRecord;
+  };
+  "shift:list-expenses": {
+    req: { sessionId?: number | null; limit?: number };
+    res: ExpenseRecord[];
+  };
+  "stock:adjust": {
+    req: {
+      menuItemId?: number | null;
+      ingredientId?: number | null;
+      kind: "adjust" | "waste" | "transfer" | "spoil";
+      quantity: number;
+      unit?: string | null;
+      reason?: string | null;
+    };
+    res: StockActionRecord;
+  };
+  "stock:list-actions": { req: { limit?: number }; res: StockActionRecord[] };
+  "audit:log": {
+    req: {
+      action: string;
+      target?: string | null;
+      details?: unknown;
+    };
+    res: AuditLogRecord;
+  };
+  "audit:list": { req: { limit?: number; sinceMs?: number }; res: AuditLogRecord[] };
+  "prints:record": {
+    req: {
+      id: string;
+      kind: "kot" | "bill" | "z_report";
+      orderId?: number | null;
+      printerName?: string | null;
+      status: "queued" | "sent" | "failed";
+      lastError?: string | null;
+      payload?: unknown;
+    };
+    res: PrintJobRecord;
+  };
+  "prints:list": { req: { limit?: number }; res: PrintJobRecord[] };
 };
 
 // ─── Phase 5 — connectivity / sync ─────────────────────────────────────────
@@ -766,6 +832,19 @@ export interface ConnectivityState {
   lastCheckedAt: number | null;
   latencyMs: number | null;
   error: string | null;
+}
+
+/** Sync Center category bucket. Stays in lock-step with `PendingCategory` in
+ *  the main process — renderer uses these as tab keys and counters. */
+export type SyncCategoryKey =
+  | "shift" | "orders" | "payments" | "prints"
+  | "expenses" | "stock" | "customers" | "audit"
+  | "held_bills" | "other";
+
+export interface SyncCategoryCounts {
+  pending: number;
+  failed: number;
+  conflicts: number;
 }
 
 export interface SyncStatusView {
@@ -785,6 +864,8 @@ export interface SyncStatusView {
     summary: string;
     lastError: string | null;
   }>;
+  /** Per-category breakdown rendered as tabs in the Sync Center. */
+  categories: Record<SyncCategoryKey, SyncCategoryCounts>;
 }
 
 export interface ConflictEntry {
@@ -794,6 +875,101 @@ export interface ConflictEntry {
   summary: string;
   details: string | null;
   capturedAt: number;
+}
+
+/** Side-by-side payload / server-response diff for a single conflict. The
+ *  renderer renders both blobs verbatim so the operator can compare. */
+export interface ConflictDiff {
+  id: number;
+  opId: number;
+  kind: string;
+  summary: string;
+  capturedAt: number;
+  local: unknown;
+  server: { status: number | null; body: unknown };
+  message: string | null;
+}
+
+export interface SyncLogEntry {
+  id: number;
+  at: number;
+  kind: string;
+  opId: number | null;
+  outcome: "synced" | "failed" | "conflict" | "retry" | string;
+  details: string | null;
+}
+
+// ─── Held bills / shift actions / stock / audit / print jobs (Phase 5+) ───
+/** A parked cart. Local-only — the server never sees a held bill. */
+export interface HeldBillRecord {
+  id: string;
+  label: string;
+  createdAt: number;
+  orderType: OrderType;
+  tableId?: number | null;
+  tableLabel?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  cashier?: string | null;
+  note?: string | null;
+  /** Cart line snapshot. Renderer reshapes back into its `CartLine[]`. */
+  lines: unknown;
+}
+
+export interface CashMovementRecord {
+  id: string;
+  sessionId: number | null;
+  kind: "in" | "out";
+  amount: number;
+  reason: string | null;
+  cashier: string | null;
+  at: number;
+  syncedAt: number | null;
+}
+
+export interface ExpenseRecord {
+  id: string;
+  sessionId: number | null;
+  category: string | null;
+  amount: number;
+  reason: string | null;
+  cashier: string | null;
+  at: number;
+  syncedAt: number | null;
+}
+
+export interface StockActionRecord {
+  id: string;
+  menuItemId: number | null;
+  ingredientId: number | null;
+  kind: "adjust" | "waste" | "transfer" | "spoil";
+  quantity: number;
+  unit: string | null;
+  reason: string | null;
+  cashier: string | null;
+  at: number;
+  syncedAt: number | null;
+}
+
+export interface AuditLogRecord {
+  id: number;
+  at: number;
+  actor: string | null;
+  action: string;
+  target: string | null;
+  details: unknown;
+  syncedAt: number | null;
+}
+
+export interface PrintJobRecord {
+  id: string;
+  kind: "kot" | "bill" | "z_report";
+  orderId: number | null;
+  printerName: string | null;
+  status: "queued" | "sent" | "failed";
+  at: number;
+  attempts: number;
+  lastError: string | null;
 }
 
 export interface LocalStoreInfo {

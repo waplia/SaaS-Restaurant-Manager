@@ -185,6 +185,117 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 3,
+    name: "shift_actions_expenses_stock_audit_held_bills",
+    sql: `
+      -- Held bills (parked carts). Originally renderer-only via localStorage;
+      -- the cache promotes them to first-class so they survive a renderer
+      -- reload, can be inspected from the Sync Center, and are scoped by
+      -- restaurant/branch/counter for multi-terminal stores.
+      CREATE TABLE IF NOT EXISTS held_bills (
+        id TEXT PRIMARY KEY,
+        restaurant_id INTEGER NOT NULL,
+        branch_id INTEGER,
+        counter_id TEXT,
+        label TEXT NOT NULL,
+        cashier TEXT,
+        created_at INTEGER NOT NULL,
+        payload TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_held_bills_scope
+        ON held_bills(restaurant_id, branch_id, created_at DESC);
+
+      -- Cash movements (cash in / cash out). Same row shape as expenses but
+      -- separated so the shift summary can total them independently.
+      CREATE TABLE IF NOT EXISTS cash_movements (
+        id TEXT PRIMARY KEY,
+        restaurant_id INTEGER NOT NULL,
+        branch_id INTEGER,
+        session_id INTEGER,
+        kind TEXT NOT NULL,           -- 'in' | 'out'
+        amount REAL NOT NULL,
+        reason TEXT,
+        cashier TEXT,
+        at INTEGER NOT NULL,
+        synced_at INTEGER,            -- non-null once the server accepted
+        server_id INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_cash_movements_at
+        ON cash_movements(restaurant_id, at DESC);
+
+      -- Expenses (petty cash). Kept separate from cash_movements so the
+      -- expense report can roll up by category without filtering.
+      CREATE TABLE IF NOT EXISTS expenses (
+        id TEXT PRIMARY KEY,
+        restaurant_id INTEGER NOT NULL,
+        branch_id INTEGER,
+        session_id INTEGER,
+        category TEXT,
+        amount REAL NOT NULL,
+        reason TEXT,
+        cashier TEXT,
+        at INTEGER NOT NULL,
+        synced_at INTEGER,
+        server_id INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_expenses_at
+        ON expenses(restaurant_id, at DESC);
+
+      -- Stock adjustments / wastage / spoilage. Recorded locally during a
+      -- shift; replayed when the server is reachable. Conflict resolution
+      -- preserves the local entry so reconciliation never loses paper trail.
+      CREATE TABLE IF NOT EXISTS stock_actions (
+        id TEXT PRIMARY KEY,
+        restaurant_id INTEGER NOT NULL,
+        branch_id INTEGER,
+        menu_item_id INTEGER,
+        ingredient_id INTEGER,
+        kind TEXT NOT NULL,           -- 'adjust' | 'waste' | 'transfer' | 'spoil'
+        quantity REAL NOT NULL,
+        unit TEXT,
+        reason TEXT,
+        cashier TEXT,
+        at INTEGER NOT NULL,
+        synced_at INTEGER,
+        server_id INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_stock_actions_at
+        ON stock_actions(restaurant_id, at DESC);
+
+      -- Audit log of every cashier-significant action. Append-only; never
+      -- updated after insert. Used by the Sync Center "view logs" tab and
+      -- the renderer-side feedback loop for managers.
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER NOT NULL,
+        actor TEXT,
+        action TEXT NOT NULL,
+        target TEXT,
+        details TEXT,
+        synced_at INTEGER,
+        server_id INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log(at DESC);
+
+      -- Print job journal. The hardware layer already keeps a failed-prints
+      -- list; this table records every dispatched job (success or not) so
+      -- the Sync Center can show counts per category and the operator can
+      -- re-trigger replays without leaving the panel.
+      CREATE TABLE IF NOT EXISTS print_jobs (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,           -- 'kot' | 'bill' | 'z_report'
+        order_id INTEGER,
+        printer_name TEXT,
+        status TEXT NOT NULL,         -- 'queued' | 'sent' | 'failed'
+        at INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        payload TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_print_jobs_at ON print_jobs(at DESC);
+    `,
+  },
 ];
 
 export function runMigrations(db: Database): void {
