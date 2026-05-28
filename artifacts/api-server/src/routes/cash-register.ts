@@ -141,6 +141,13 @@ async function computeSessionTotals(executor: DbOrTx, sessionId: number, restaur
 
 router.get("/restaurants/:restaurantId/cash-register/current", async (req, res) => {
   const restaurantId = Number(req.params.restaurantId);
+  // Disable conditional caching — the response shape varies per requester
+  // (cashier-only users get blockedByOther; managers get the full session),
+  // and a stale 304 here was the source of the "register already open"
+  // loop on mobile: the client would keep using a pre-fix cached body
+  // that lacked the blockedByOther flag, so the Open Register button
+  // never disappeared even after another device opened the register.
+  res.setHeader("Cache-Control", "no-store, must-revalidate");
   const session = await findOpenSession(db, restaurantId);
   if (!session) return void res.json({ session: null, totals: null, blockedByOther: false });
   const [openedBy] = session.openedByUserId
