@@ -50,6 +50,51 @@ export default function BillScreen() {
     navigation.setOptions({ title: `Bill — Order #${formatOrderNumber(order?.orderInternalNumber ?? order?.orderNumber ?? id)}` });
   }, [order, id]);
 
+  /**
+   * Settle the order and (optionally) print the receipt in one tap.
+   * Task #693 — `alsoPrint=true` triggers the OS print sheet straight
+   * after the payment succeeds so the cashier doesn't need a second tap.
+   */
+  const settleAndOptionallyPrint = async (alsoPrint: boolean) => {
+    if (!order) return;
+    setConfirming(true);
+    try {
+      await payOrder.mutateAsync({
+        restaurantId,
+        id: order.id,
+        data: { paymentMethod: selectedPayment as "cash" | "card" | "upi" },
+      });
+      await updateOrder.mutateAsync({
+        restaurantId,
+        id: order.id,
+        data: { status: "completed" },
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      qc.invalidateQueries({ queryKey: getGetOrderQueryKey(restaurantId, id) });
+      if (alsoPrint) {
+        // Fire-and-forget: printBill surfaces its own alert on failure
+        // and we never want to block the confirmation toast.
+        const orderNumber = formatOrderNumber(order.orderInternalNumber ?? order.orderNumber ?? id);
+        printBill({
+          restaurantId,
+          orderId: order.id,
+          orderNumber,
+          accessToken,
+          channel: "mobile_share",
+        }).catch(() => { /* surfaced by printBill */ });
+      }
+      Alert.alert(
+        "Payment Confirmed!",
+        `Order #${formatOrderNumber(order.orderInternalNumber ?? order.orderNumber)} marked as paid.`,
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+    } catch {
+      Alert.alert("Error", "Could not confirm payment. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
   const handleConfirmPayment = () => {
     if (!order) return;
     Alert.alert(
@@ -57,34 +102,21 @@ export default function BillScreen() {
       `Mark this order as paid via ${PAYMENT_METHODS.find((m) => m.key === selectedPayment)?.label ?? selectedPayment}?\n\nTotal: ₹${Number(order.totalAmount).toLocaleString()}`,
       [
         { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            setConfirming(true);
-            try {
-              await payOrder.mutateAsync({
-                restaurantId,
-                id: order.id,
-                data: { paymentMethod: selectedPayment as "cash" | "card" | "upi" },
-              });
-              await updateOrder.mutateAsync({
-                restaurantId,
-                id: order.id,
-                data: { status: "completed" },
-              });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              qc.invalidateQueries({ queryKey: getGetOrderQueryKey(restaurantId, id) });
-              Alert.alert("Payment Confirmed!", `Order #${formatOrderNumber(order.orderInternalNumber ?? order.orderNumber)} marked as paid.`, [
-                { text: "OK", onPress: () => router.back() },
-              ]);
-            } catch {
-              Alert.alert("Error", "Could not confirm payment. Please try again.");
-            } finally {
-              setConfirming(false);
-            }
-          },
-        },
-      ]
+        { text: "Confirm", onPress: () => settleAndOptionallyPrint(false) },
+      ],
+    );
+  };
+
+  /** Task #693 — Bill & Pay: confirm payment AND print the receipt in one tap. */
+  const handleConfirmPaymentAndPrint = () => {
+    if (!order) return;
+    Alert.alert(
+      "Pay & Print",
+      `Mark this order as paid via ${PAYMENT_METHODS.find((m) => m.key === selectedPayment)?.label ?? selectedPayment} and print the receipt?\n\nTotal: ₹${Number(order.totalAmount).toLocaleString()}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Pay & Print", onPress: () => settleAndOptionallyPrint(true) },
+      ],
     );
   };
 
@@ -175,33 +207,50 @@ export default function BillScreen() {
               ))}
             </View>
 
+            {/* Task #693 — Pay & Print is the new primary action: settle the
+                bill AND fire the printer in one tap. The two single-step
+                buttons remain available below for cashiers who want to
+                pay first or reprint without re-paying. */}
             <Pressable
               style={({ pressed }) => [
                 styles.confirmBtn,
                 { backgroundColor: colors.primary, opacity: pressed || confirming ? 0.8 : 1, marginTop: 4 },
               ]}
-              onPress={handleConfirmPayment}
+              onPress={handleConfirmPaymentAndPrint}
               disabled={confirming}
             >
               {confirming ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                  <Text style={styles.confirmBtnText}>Confirm Payment</Text>
+                  <Ionicons name="card-outline" size={18} color="#fff" />
+                  <Text style={styles.confirmBtnText}>Pay &amp; Print</Text>
                 </>
               )}
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.printBtn,
-                { borderColor: colors.border, opacity: pressed ? 0.7 : 1, justifyContent: "center" },
-              ]}
-              onPress={handlePrintBill}
-            >
-              <Ionicons name="print-outline" size={18} color={colors.foreground} />
-              <Text style={[styles.printBtnText, { color: colors.foreground }]}>Print Bill</Text>
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.printBtn,
+                  { flex: 1, borderColor: colors.border, opacity: pressed || confirming ? 0.7 : 1, justifyContent: "center" },
+                ]}
+                onPress={handleConfirmPayment}
+                disabled={confirming}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color={colors.foreground} />
+                <Text style={[styles.printBtnText, { color: colors.foreground }]}>Confirm Payment</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.printBtn,
+                  { flex: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1, justifyContent: "center" },
+                ]}
+                onPress={handlePrintBill}
+              >
+                <Ionicons name="print-outline" size={18} color={colors.foreground} />
+                <Text style={[styles.printBtnText, { color: colors.foreground }]}>Print Bill</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 

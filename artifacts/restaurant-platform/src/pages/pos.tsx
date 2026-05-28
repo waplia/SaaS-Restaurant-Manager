@@ -31,7 +31,7 @@ import { playPosSound } from "@/lib/posSounds";
 import {
   ShoppingBag, CreditCard, Banknote, Smartphone, Printer,
   Trash2, Plus, Minus, Tag, ChevronDown, ChevronUp, X,
-  Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors,
+  Utensils, Package, Bike, ReceiptText, AlertTriangle, Scissors, ChefHat, Receipt,
   Loader2, Check, Lock, Star, UserCheck, AlertCircle, Mic, Gift, Search, User,
   QrCode, CalendarClock, Clock, Leaf, StickyNote, Pause, RotateCcw,
   Phone, MessageCircle, Flame, Sparkles,
@@ -1945,8 +1945,14 @@ export default function PosPage() {
   const handleDeleteLast = useCallback(() => {
     setCart(prev => prev.slice(0, -1));
   }, []);
-  const handlePrintKOT = useCallback(() => {
-    if (!placedOrder) {
+  const handlePrintKOT = useCallback((orderOverride?: OrderDetail | null) => {
+    // Task #693 — compound flows place the order then immediately print on
+    // the same tick. The freshly-created order has not yet round-tripped
+    // through setState/render, so we accept an explicit override and only
+    // fall back to the state-bound `placedOrder` for the stand-alone
+    // post-place reprint path.
+    const order = orderOverride ?? placedOrder;
+    if (!order) {
       toast({ title: "Place order first", description: "There's nothing to send to the kitchen yet.", variant: "destructive" });
       playPosSound("error");
       return;
@@ -1974,8 +1980,8 @@ export default function PosPage() {
           notes: oi.notes ?? undefined,
         }));
     printKitchenTicket({
-      orderNumber: formatOrderNumber(placedOrder.orderDisplayNumber ?? placedOrder.orderNumber),
-      createdAt: placedOrder.createdAt,
+      orderNumber: formatOrderNumber(order.orderDisplayNumber ?? order.orderNumber),
+      createdAt: order.createdAt,
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : undefined,
       orderType,
       items,
@@ -1984,16 +1990,19 @@ export default function PosPage() {
     playPosSound("success");
   }, [placedOrder, liveItems, cart, selectedTable, orderType, toast]);
 
-  const handlePrintCurrent = useCallback(() => {
-    if (!placedOrder) {
+  const handlePrintCurrent = useCallback((orderOverride?: OrderDetail | null) => {
+    // Task #693 — same as handlePrintKOT: compound flows pass the freshly-
+    // created order through directly so we don't depend on a state tick.
+    const order = orderOverride ?? placedOrder;
+    if (!order) {
       toast({ title: "Place order first", variant: "destructive" });
       return;
     }
     printReceipt({
-      orderNumber: formatOrderNumber(placedOrder.orderDisplayNumber ?? placedOrder.orderNumber),
+      orderNumber: formatOrderNumber(order.orderDisplayNumber ?? order.orderNumber),
       tableLabel: selectedTable ? `Table ${selectedTable.tableNumber}` : "",
       orderType,
-      items: placedOrder
+      items: liveItems.length > 0
         ? liveItems.map(oi => ({ name: oi.menuItemName, unitPrice: Number(oi.unitPrice), quantity: oi.quantity, modifiers: [] }))
         : cart.map(c => ({ name: c.name, unitPrice: c.unitPrice, quantity: c.quantity, modifiers: c.modifiers })),
       totals: displayTotals,
@@ -2003,7 +2012,7 @@ export default function PosPage() {
       logoUrl: restaurant?.logoUrl ?? undefined,
       restaurantAddress: [restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || undefined,
       restaurantPhone: restaurant?.phone ?? undefined,
-      createdAt: placedOrder.createdAt,
+      createdAt: order.createdAt,
       discounts: discountReceiptLines.length > 0 ? discountReceiptLines : undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2864,27 +2873,79 @@ export default function PosPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {!placedOrder ? (
-                  <>
-                    <Button variant="outline" size="sm" disabled={createOrder.isPending} onClick={handlePlaceOrder}>
-                      Place Order
-                    </Button>
-                    <Button size="sm" disabled={createOrder.isPending || payOrder.isPending} onClick={handlePayNow}>
-                      <CreditCard className="w-3.5 h-3.5 mr-1.5" />Pay Now
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => setShowSplitModal(true)}>
-                      <Scissors className="w-3.5 h-3.5 mr-1.5" />Split Bill
-                    </Button>
-                    <Button size="sm" disabled={payOrder.isPending} onClick={() => setShowPayModal(true)}>
-                      <CreditCard className="w-3.5 h-3.5 mr-1.5" />Pay
-                    </Button>
-                  </>
-                )}
+              {/* Task #693 — Compound action trio. Each button places the
+                  order (if not yet placed) and then performs the second
+                  action in one tap. Idempotency is preserved because the
+                  underlying `createOrder` mutation already dedupes on
+                  retry; the cashier-register gate inside the Pay modal
+                  still applies to Bill & Pay. */}
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex flex-col h-auto py-2 leading-tight"
+                  disabled={createOrder.isPending || cart.length === 0}
+                  onClick={async () => {
+                    if (!placedOrder) {
+                      const ord = await handlePlaceOrder();
+                      if (!ord) return;
+                      // Pass the freshly-created order directly — don't
+                      // wait on setState; the print would otherwise see
+                      // the stale (null) `placedOrder` from this render.
+                      handlePrintKOT(ord);
+                    } else {
+                      handlePrintKOT();
+                    }
+                  }}
+                  title="Place order + send kitchen ticket to printer"
+                >
+                  <span className="flex items-center gap-1"><ChefHat className="w-3.5 h-3.5" /><Printer className="w-3 h-3" /></span>
+                  <span className="text-[11px] mt-0.5">KOT &amp; Print</span>
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex flex-col h-auto py-2 leading-tight"
+                  disabled={createOrder.isPending || payOrder.isPending || (cart.length === 0 && !placedOrder)}
+                  onClick={async () => {
+                    if (!placedOrder) {
+                      const ord = await handlePlaceOrder();
+                      if (!ord) return;
+                    }
+                    setShowPayModal(true);
+                  }}
+                  title="Generate bill and open payment"
+                >
+                  <span className="flex items-center gap-1"><Receipt className="w-3.5 h-3.5" /><CreditCard className="w-3 h-3" /></span>
+                  <span className="text-[11px] mt-0.5">Bill &amp; Pay</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex flex-col h-auto py-2 leading-tight"
+                  disabled={createOrder.isPending || (cart.length === 0 && !placedOrder)}
+                  onClick={async () => {
+                    if (!placedOrder) {
+                      const ord = await handlePlaceOrder();
+                      if (!ord) return;
+                      handlePrintCurrent(ord);
+                    } else {
+                      handlePrintCurrent();
+                    }
+                  }}
+                  title="Generate bill and print receipt (no payment)"
+                >
+                  <span className="flex items-center gap-1"><Receipt className="w-3.5 h-3.5" /><Printer className="w-3 h-3" /></span>
+                  <span className="text-[11px] mt-0.5">Bill &amp; Print</span>
+                </Button>
               </div>
+
+              {placedOrder ? (
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={() => setShowSplitModal(true)}>
+                    <Scissors className="w-3.5 h-3.5 mr-1.5" />Split Bill
+                  </Button>
+                </div>
+              ) : null}
 
               {/* Pre-placement quick actions: Hold / Recall */}
               {!placedOrder && (

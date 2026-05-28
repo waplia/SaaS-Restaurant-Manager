@@ -16,17 +16,30 @@ export interface CartCustomerPayload {
   address?: string;
 }
 
+/**
+ * Task #693 — compound cart action.
+ *   - `kot_print` = create + auto-KOT (kitchen printer fires server-side)
+ *   - `bill_pay`  = create + open bill screen for payment
+ *   - `bill_print` = create + render & print/share customer bill
+ */
+export type CartSendAction = "kot_print" | "bill_pay" | "bill_print";
+
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onSend: (customer: CartCustomerPayload) => Promise<void> | void;
+  /** Called with the action variant. Default action when the single CTA is
+   *  used is `kot_print` so existing call-sites keep working. */
+  onSend: (customer: CartCustomerPayload, action: CartSendAction) => Promise<void> | void;
   taxRate?: number;
   serviceCharge?: number;
   busy?: boolean;
   primaryLabel?: string;
+  /** When true, render the three compound action buttons instead of the
+   *  single primary CTA. Off by default so callers opt-in per screen. */
+  showActionTrio?: boolean;
 }
 
-export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, serviceCharge = 0, busy, primaryLabel = "Send to Kitchen" }: Props) {
+export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, serviceCharge = 0, busy, primaryLabel = "Send to Kitchen", showActionTrio = false }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const alert = useAlertFn();
@@ -68,7 +81,7 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
 
   const persistCustomer = () => attachCustomer(buildPayload());
 
-  const handleSend = async () => {
+  const handleSend = async (action: CartSendAction = "kot_print") => {
     if (trimmedPhone && !phoneValid) {
       alert(
         "Check phone number",
@@ -87,7 +100,7 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
     // latest values, but pass the payload directly to onSend to eliminate
     // any race with React's async state propagation.
     attachCustomer(payload);
-    await onSend(payload);
+    await onSend(payload, action);
   };
 
   const subtotal = total;
@@ -221,21 +234,87 @@ export function CartSummarySheet({ visible, onClose, onSend, taxRate = 0, servic
         </ScrollView>
 
         <View style={[styles.footer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>
-          <Pressable
-            disabled={busy || cart.items.length === 0}
-            onPress={handleSend}
-            style={[styles.cta, { backgroundColor: cart.items.length === 0 ? colors.muted : colors.primary, opacity: busy ? 0.7 : 1 }]}
-          >
-            {busy ? <ActivityIndicator color="#fff" /> : (
-              <>
-                <Ionicons name="flame-outline" size={18} color="#fff" />
-                <Text style={styles.ctaText}>{primaryLabel}</Text>
-              </>
-            )}
-          </Pressable>
+          {showActionTrio ? (
+            // Task #693 — three compound actions in one tap.
+            <View style={styles.trioRow}>
+              <TrioBtn
+                disabled={busy || cart.items.length === 0}
+                busy={busy}
+                onPress={() => handleSend("kot_print")}
+                icon="flame-outline"
+                label={"KOT &\nPrint"}
+                primary
+                colors={colors}
+              />
+              <TrioBtn
+                disabled={busy || cart.items.length === 0}
+                busy={busy}
+                onPress={() => handleSend("bill_pay")}
+                icon="card-outline"
+                label={"Bill &\nPay"}
+                colors={colors}
+              />
+              <TrioBtn
+                disabled={busy || cart.items.length === 0}
+                busy={busy}
+                onPress={() => handleSend("bill_print")}
+                icon="print-outline"
+                label={"Bill &\nPrint"}
+                colors={colors}
+              />
+            </View>
+          ) : (
+            <Pressable
+              disabled={busy || cart.items.length === 0}
+              onPress={() => handleSend("kot_print")}
+              style={[styles.cta, { backgroundColor: cart.items.length === 0 ? colors.muted : colors.primary, opacity: busy ? 0.7 : 1 }]}
+            >
+              {busy ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Ionicons name="flame-outline" size={18} color="#fff" />
+                  <Text style={styles.ctaText}>{primaryLabel}</Text>
+                </>
+              )}
+            </Pressable>
+          )}
         </View>
       </View>
     </Modal>
+  );
+}
+
+function TrioBtn({
+  disabled, busy, onPress, icon, label, primary, colors,
+}: {
+  disabled?: boolean;
+  busy?: boolean;
+  onPress: () => void;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  primary?: boolean;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const bg = primary ? colors.primary : colors.card;
+  const fg = primary ? "#fff" : colors.foreground;
+  const border = primary ? colors.primary : colors.border;
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.trioBtn,
+        { backgroundColor: bg, borderColor: border, opacity: disabled ? 0.55 : 1 },
+      ]}
+    >
+      {busy && primary ? (
+        <ActivityIndicator color={fg} />
+      ) : (
+        <>
+          <Ionicons name={icon} size={18} color={fg} />
+          <Text style={[styles.trioLabel, { color: fg }]} numberOfLines={2}>{label}</Text>
+        </>
+      )}
+    </Pressable>
   );
 }
 
@@ -279,4 +358,7 @@ const styles = StyleSheet.create({
   customerHint: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 4 },
   cta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 14, borderRadius: 14 },
   ctaText: { color: "#fff", fontSize: 15, fontFamily: "Inter_700Bold" },
+  trioRow: { flexDirection: "row", gap: 8 },
+  trioBtn: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: 12, borderRadius: 12, borderWidth: 1, minHeight: 68 },
+  trioLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center", lineHeight: 14 },
 });

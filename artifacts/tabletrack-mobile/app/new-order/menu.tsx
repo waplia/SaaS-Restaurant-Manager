@@ -21,7 +21,8 @@ import { useCart, type CartModifier } from "@/context/CartContext";
 import { ItemCard } from "@/components/ItemCard";
 import { ModifierBottomSheet } from "@/components/ModifierBottomSheet";
 import { MobileCartBar } from "@/components/MobileCartBar";
-import { CartSummarySheet, type CartCustomerPayload } from "@/components/CartSummarySheet";
+import { CartSummarySheet, type CartCustomerPayload, type CartSendAction } from "@/components/CartSummarySheet";
+import { printBill } from "@/lib/printBill";
 import { EmptyState } from "@/components/EmptyState";
 import { VoiceOrderModal, type VoiceOrderResult } from "@/components/VoiceOrderModal";
 
@@ -46,7 +47,7 @@ export default function NewOrderMenuScreen() {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === "web";
   const qc = useQueryClient();
-  const { restaurantId } = useAuth();
+  const { restaurantId, accessToken } = useAuth();
   const { cart, addLine, itemCount, total, clearCart, updateQuantity, removeLine, attachTable } = useCart();
 
   // Trust the route params as the source of truth for table identity when
@@ -90,7 +91,12 @@ export default function NewOrderMenuScreen() {
   // reuses both so we never create a duplicate parent order, and only the
   // still-failing items are re-sent (with per-line idempotency keys, so
   // even an already-applied item POST won't double-bill the order).
-  const [pendingOrder, setPendingOrder] = useState<{ orderId: number; createKey: string } | null>(null);
+  // `orderId` is null while the create POST is in flight (so a lost
+  // response on retry reuses the same `createKey` and the server dedupes
+  // via X-Idempotency-Key). It becomes the real id once the server
+  // responds. Task #693 — without this, a timed-out POST would mint a
+  // fresh key on retry and could double-create the order.
+  const [pendingOrder, setPendingOrder] = useState<{ orderId: number | null; createKey: string } | null>(null);
   // Task #602 — Manager-PIN approval flow for adding items after a bill
   // has been generated. The server returns 409 REQUIRES_APPROVAL when the
   // current waiter role can't bypass post-bill behavior. We collect the
@@ -197,7 +203,7 @@ export default function NewOrderMenuScreen() {
   // withTimeout — a stuck network call is aborted and the spinner is
   // guaranteed to clear within a few seconds.
 
-  const handleSend = async (customerOverride?: CartCustomerPayload) => {
+  const handleSend = async (customerOverride?: CartCustomerPayload, action: CartSendAction = "kot_print") => {
     if (cart.items.length === 0) {
       Alert.alert("Empty Cart", "Add items first.");
       return;
@@ -253,6 +259,11 @@ export default function NewOrderMenuScreen() {
       // response doesn't double-create the order. We no longer carry
       // per-line keys because there's only one server call.
       const createKey = pendingOrder?.createKey ?? mobileUid();
+      // Persist the key BEFORE the POST so a dropped/aborted response
+      // doesn't lose it — on retry we'll reuse the exact same key and
+      // the server's X-Idempotency-Key dedupe will collapse the second
+      // request onto the first order.
+      if (!pendingOrder) setPendingOrder({ orderId: null, createKey });
       const body: Record<string, unknown> = {
         orderType: orderTypeForApi,
         items: cart.items.map((line) => ({
@@ -273,6 +284,7 @@ export default function NewOrderMenuScreen() {
       if (customerForSend?.phone) body.customerPhone = customerForSend.phone;
       if (customerForSend?.address) body.deliveryAddress = customerForSend.address;
 
+      let createdOrderId: number | null = null;
       try {
         const created = await withTimeout((signal) =>
           customFetch<{ id: number }>(`/api/restaurants/${restaurantId}/orders`, {
@@ -282,6 +294,7 @@ export default function NewOrderMenuScreen() {
             signal,
           }),
         );
+        createdOrderId = created.id;
         setPendingOrder({ orderId: created.id, createKey });
       } catch (sendErr) {
         const e = sendErr as { status?: number; data?: { error?: string; code?: string } | null; message?: string };
@@ -310,6 +323,33 @@ export default function NewOrderMenuScreen() {
       if (isAppendMode) {
         qc.invalidateQueries({ queryKey: ["running-order"] });
       }
+
+      // Task #693 — compound action follow-up. For kot_print the kitchen
+      // ticket already fires server-side via auto-KOT, so we just dismiss
+      // the modal as before. For bill_pay we hand off to the bill screen
+      // so the cashier can collect payment. For bill_print we render and
+      // print the bill via the OS share/print sheet (or new browser tab
+      // on web) and then dismiss.
+      const orderIdForFollowUp = createdOrderId ?? (isAppendMode ? appendOrderId : null);
+      if (action === "bill_pay" && orderIdForFollowUp != null) {
+        try {
+          router.replace({ pathname: "/(waiter)/bill/[orderId]", params: { orderId: String(orderIdForFollowUp) } });
+        } catch {
+          router.push(`/(waiter)/bill/${orderIdForFollowUp}` as never);
+        }
+        return;
+      }
+      if (action === "bill_print" && orderIdForFollowUp != null) {
+        // Fire-and-forget; printBill shows its own alert on failure and
+        // we never want to block the close on a slow OS print sheet.
+        printBill({
+          restaurantId,
+          orderId: orderIdForFollowUp,
+          accessToken,
+          channel: "mobile_share",
+        }).catch(() => { /* surfaced by printBill */ });
+      }
+
       // Dismiss the new-order modal back to whatever screen launched it
       // (waiter Tables, owner Home, etc.). Hard-navigating to a fixed
       // "/(owner)/orders" route caused an infinite redirect loop for
@@ -604,6 +644,12 @@ export default function NewOrderMenuScreen() {
         serviceCharge={serviceCharge}
         busy={busy}
         primaryLabel={isAppendMode ? "Add to running bill" : "Send to Kitchen"}
+        // Task #693 — show the compound action trio (KOT&Print / Bill&Pay /
+        // Bill&Print) instead of a single CTA. Appending to a running bill
+        // is excluded — those rounds always go through the single
+        // "Add to running bill" path because the bill flow is already
+        // owned by the existing order.
+        showActionTrio={!isAppendMode}
       />
 
       {/* Task #602 — manager-PIN approval modal for post-bill adds. */}
