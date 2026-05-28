@@ -19,10 +19,11 @@ import { LoginScreen } from "./screens/Login";
 import { OutletPickerScreen } from "./screens/OutletPicker";
 import { CounterPickerScreen } from "./screens/CounterPicker";
 import { ShiftOpenScreen } from "./screens/ShiftOpen";
-import { WorkspaceScreen } from "./screens/Workspace";
+import { WorkspaceRouter } from "./workspaces/WorkspaceRouter";
 import { ConnectionSettingsScreen } from "./screens/ConnectionSettings";
 import { CustomerDisplay } from "./screens/CustomerDisplay";
 import { FullscreenCenter, Spinner } from "./ui/components";
+import { setCurrentPrefsUserId } from "./hooks/useAppPrefs";
 
 type Override = "settings" | "switch-outlet" | null;
 
@@ -49,6 +50,10 @@ export function App() {
 
   const refresh = useCallback(async () => {
     const snap = await window.khanalagao.session.snapshot();
+    // Point useAppPrefs at the signed-in user so theme / density /
+    // lock-PIN / etc are per-user on shared terminals. `null` resets
+    // to the "_guest" scope used by the login + connection screens.
+    setCurrentPrefsUserId(snap.auth.user?.id ?? null);
     setSnapshot(snap);
   }, []);
 
@@ -62,6 +67,12 @@ export function App() {
       setApiBaseUrl(s.apiBaseUrl);
       setVersion(v.version);
       setPlatform(v.platform);
+      // Scope useAppPrefs to the signed-in user *before* rendering the
+      // snapshot — otherwise the first paint reads "_guest" theme /
+      // density / lock PIN even for persisted sessions on shared
+      // terminals, which is exactly the bug per-user prefs are meant
+      // to prevent. Mirror this in every refresh path below.
+      setCurrentPrefsUserId(snap.auth.user?.id ?? null);
       setSnapshot(snap);
     })().catch(console.error);
 
@@ -194,34 +205,23 @@ export function App() {
     );
   }
 
-  // Gate 5 — open shift
-  if (!snapshot.shift.sessionId) {
-    return (
-      <ShiftOpenScreen
-        selection={snapshot.selection}
-        user={snapshot.auth.user}
-        onOpened={refresh}
-        onBack={async () => {
-          await window.khanalagao.selection.setBranch({
-            branchId: snapshot.selection.branchId!,
-            branchName: snapshot.selection.branchName ?? "",
-          });
-          await refresh();
-        }}
-      />
-    );
-  }
-
-  // Workspace
+  // NOTE: the open-shift gate used to live here, forcing *every* role
+  // through ShiftOpenScreen even when they were headed for Manager /
+  // Inventory / Accounts / Marketing / Delivery — none of which need a
+  // cash drawer to do their job. The gate now lives inside
+  // WorkspaceRouter and is applied **only** when the user is entering
+  // the Cashier workspace. Specialist roles can now sign in and reach
+  // their workspace without first asking a cashier to open a shift.
   return (
-    <WorkspaceScreen
+    <WorkspaceRouter
       user={snapshot.auth.user}
       selection={snapshot.selection}
-      shiftOpenedAt={snapshot.shift.openedAt}
+      shift={snapshot.shift}
       online={online}
       onOpenSettings={() => setOverride("settings")}
       onSignOut={signOut}
       onSwitchOutlet={switchOutlet}
+      onRefresh={refresh}
     />
   );
 }

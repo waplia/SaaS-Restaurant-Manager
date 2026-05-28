@@ -75,21 +75,57 @@ const DEFAULTS: AppPrefs = {
   customerDisplayTagline: "Welcome — Thank you for dining with us",
 };
 
-const STORAGE_KEY = "kp:appPrefs";
+/**
+ * Storage scoping
+ *
+ * Prefs are stored per user so shared terminals don't leak one
+ * cashier's theme / density / lock PIN / role to the next. App.tsx
+ * calls `setCurrentPrefsUserId(user.id)` immediately after auth; before
+ * that (login screen, etc) we fall back to the legacy "_guest" key.
+ *
+ * For a one-shot migration, when a user-scoped key is missing we copy
+ * the legacy global blob into the new user-scoped key on first read —
+ * so existing terminals don't lose their settings on first launch
+ * after the upgrade.
+ */
+const LEGACY_KEY = "kp:appPrefs";
+const KEY_PREFIX = "kp:appPrefs:u:";
+let CURRENT_USER_ID: string = "_guest";
+const subscribers = new Set<() => void>();
+
+export function setCurrentPrefsUserId(id: number | string | null | undefined) {
+  const next = id == null ? "_guest" : String(id);
+  if (next === CURRENT_USER_ID) return;
+  CURRENT_USER_ID = next;
+  for (const fn of subscribers) fn();
+}
+
+function storageKeyFor(userId: string): string {
+  return `${KEY_PREFIX}${userId}`;
+}
 
 function readPrefs(): AppPrefs {
+  const key = storageKeyFor(CURRENT_USER_ID);
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULTS };
-    const parsed = JSON.parse(raw) as Partial<AppPrefs>;
-    return { ...DEFAULTS, ...parsed };
+    const raw = localStorage.getItem(key);
+    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<AppPrefs>) };
+    // First read for this user — seed from the legacy global blob if
+    // present so existing installs keep their settings.
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const parsed = { ...DEFAULTS, ...(JSON.parse(legacy) as Partial<AppPrefs>) };
+      try { localStorage.setItem(key, JSON.stringify(parsed)); } catch { /* ignore */ }
+      return parsed;
+    }
+    return { ...DEFAULTS };
   } catch {
     return { ...DEFAULTS };
   }
 }
 
 function writePrefs(p: AppPrefs) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+  const key = storageKeyFor(CURRENT_USER_ID);
+  try { localStorage.setItem(key, JSON.stringify(p)); } catch { /* ignore */ }
 }
 
 /** Bare read for non-React callers. */
@@ -100,10 +136,17 @@ export function useAppPrefs() {
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) setPrefs(readPrefs());
+      if (e.key && (e.key === storageKeyFor(CURRENT_USER_ID) || e.key === LEGACY_KEY)) {
+        setPrefs(readPrefs());
+      }
     };
+    const onUserSwitch = () => setPrefs(readPrefs());
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    subscribers.add(onUserSwitch);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      subscribers.delete(onUserSwitch);
+    };
   }, []);
 
   const update = useCallback((patch: Partial<AppPrefs>) => {

@@ -40,6 +40,10 @@ import { useAppPrefs, hashPin } from "../hooks/useAppPrefs";
 import { fmtINR } from "./order/types";
 import { ManagerPinModal } from "./ManagerPinModal";
 import { broadcastDisplay } from "./CustomerDisplay";
+import { CommandPalette } from "../workspaces/CommandPalette";
+import { useFavoritesRecents } from "../hooks/useFavoritesRecents";
+import { WORKSPACES, deriveAccess, hasAnyPermission } from "../workspaces/roles";
+import type { NavItem, WorkspaceKey } from "../workspaces/types";
 
 interface Props {
   user: User;
@@ -49,6 +53,14 @@ interface Props {
   onOpenSettings: () => void;
   onSignOut: () => void;
   onSwitchOutlet: () => void;
+  /** Count of outlets/branches the tenant has. When ≤ 1, the
+   *  "Switch outlet / counter" menu items are hidden because the
+   *  action has no destination. Optional for backwards compat. */
+  outletCount?: number;
+  /** Workspaces the signed-in user can switch into. Length 1 → switcher hidden. */
+  availableWorkspaces?: WorkspaceKey[];
+  /** Called when the cashier picks a different workspace from the header. */
+  onSwitchWorkspace?: (key: WorkspaceKey) => void;
 }
 
 type NavKey =
@@ -82,11 +94,26 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Ctrl+N", "New"], ["?", "Help"],
 ];
 
-/** Which nav items each role can see. Manager sees everything. */
-const ROLE_NAV: Record<"cashier" | "waiter" | "manager", Set<NavKey>> = {
-  manager: new Set(["pos","orders","tables","kitchen","qr","customers","payments","shift","hardware","reports","settings"]),
-  cashier: new Set(["pos","orders","tables","kitchen","qr","customers","payments","shift","reports","settings"]),
-  waiter:  new Set(["pos","orders","tables","kitchen","qr","customers","settings"]),
+/**
+ * Permissions required to see each cashier nav tile. Gating runs off
+ * the session-derived access context (deriveAccess(user)) rather than
+ * the local `appPrefs.role` toggle, so the cashier rail enforces the
+ * same authorization surface as the rest of the shell. `settings` and
+ * the always-visible POS surface require no extra permission beyond
+ * being signed in.
+ */
+const NAV_PERMS: Record<NavKey, string[]> = {
+  pos:       ["pos.use"],
+  orders:    ["orders.read"],
+  tables:    ["tables.read"],
+  kitchen:   ["kitchen.read"],
+  qr:        ["orders.read"],
+  customers: ["customers.read"],
+  payments:  ["payments.read"],
+  shift:     ["shift.open", "shift.close"],
+  hardware:  ["hardware.manage"],
+  reports:   ["reports.read"],
+  settings:  [], // always visible
 };
 
 export function WorkspaceScreen(props: Props) {
@@ -109,6 +136,13 @@ export function WorkspaceScreen(props: Props) {
   const [handoff, setHandoff] = useState<WorkspaceHandoff | null>(null);
   const [updateBanner, setUpdateBanner] = useState<{ kind: "info" | "ready"; text: string } | null>(null);
   const [pinGate, setPinGate] = useState<{ reason: string; onAllow: () => void } | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+
+  // Favorites + recents — pinned modules at the top of the rail, last
+  // opened items surfaced first in the command palette.
+  const fav = useFavoritesRecents(props.user.id, "cashier");
+  const access = useMemo(() => deriveAccess(props.user), [props.user]);
 
   // Badge counters refreshed every 12s — keeps the rail informative without
   // hammering the API. Live = unpaid in-progress orders. New QR = unsettled
@@ -243,6 +277,11 @@ export function WorkspaceScreen(props: Props) {
         window.dispatchEvent(new CustomEvent("tt:shortcut", { detail: { key: "pay" } }));
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(v => !v);
+        return;
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -349,6 +388,32 @@ export function WorkspaceScreen(props: Props) {
   };
 
   const clock = useClock();
+
+  // Wrap the existing nav switcher so picking a tile also feeds the
+  // recents list that powers the command palette.
+  const goTo = useCallback((k: NavKey) => {
+    setActive(k);
+    fav.recordRecent(k);
+  }, [fav]);
+
+  // NavItem projection of the cashier rail — feeds the command palette
+  // and (eventually) any cross-workspace search surface. Kept here so a
+  // single source of truth drives both the rail and palette.
+  const paletteItems: NavItem[] = useMemo(() => {
+    const visibleKeys = NAV.filter(n => hasAnyPermission(access, NAV_PERMS[n.key]));
+    return visibleKeys.map(n => ({
+      key: n.key,
+      label: n.label,
+      group: "Cashier",
+      icon: n.icon,
+      aliases: n.key === "pos" ? ["new order", "till"]
+        : n.key === "qr" ? ["online orders", "scan"]
+        : n.key === "shift" ? ["close", "drawer"] : [],
+    }));
+  }, [access]);
+
+  const switcherWorkspaces = (props.availableWorkspaces ?? []).filter(k => k !== "cashier");
+  const showWorkspaceSwitcher = switcherWorkspaces.length > 0 && !!props.onSwitchWorkspace;
 
   return (
     <div style={{
@@ -460,6 +525,69 @@ export function WorkspaceScreen(props: Props) {
           padding: "6px 10px", borderRadius: 6, border: `1px solid ${colors.border}`,
         }}>{clock}</span>
 
+        {/* Command palette hint — global Ctrl+K opens the same modal. */}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          title="Open command palette"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            background: colors.panelAlt, border: `1px solid ${colors.border}`,
+            color: colors.textDim, padding: "6px 10px", borderRadius: 8,
+            fontSize: 12, cursor: "pointer",
+          }}
+        >
+          <span>Search…</span>
+          <kbd style={{
+            background: colors.panel, padding: "1px 6px", borderRadius: 4,
+            border: `1px solid ${colors.borderStrong}`,
+            fontFamily: "monospace", fontSize: 10, color: colors.textPrimary,
+          }}>{navigator.platform.includes("Mac") ? "⌘K" : "Ctrl+K"}</kbd>
+        </button>
+
+        {/* Workspace switcher — only when the user can reach more than
+            one workspace. Hidden for cashier-only accounts so the POS
+            chrome stays exactly as it was before this task. */}
+        {showWorkspaceSwitcher && (
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setWorkspaceMenuOpen(v => !v)}
+              title="Switch workspace"
+              style={{
+                background: colors.panelAlt, border: `1px solid ${colors.border}`,
+                color: colors.textPrimary, padding: "6px 10px", borderRadius: 8,
+                fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6,
+              }}
+            >
+              <span>Workspace</span><span style={{ color: colors.textDim }}>▾</span>
+            </button>
+            {workspaceMenuOpen && (
+              <div
+                onMouseLeave={() => setWorkspaceMenuOpen(false)}
+                style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0,
+                  minWidth: 260, background: colors.panel,
+                  border: `1px solid ${colors.border}`, borderRadius: 10, padding: 6,
+                  boxShadow: "0 12px 32px rgba(0,0,0,0.45)", zIndex: 60,
+                }}
+              >
+                <div style={{
+                  padding: "6px 10px", fontSize: 10, textTransform: "uppercase",
+                  letterSpacing: 0.6, color: colors.textMuted,
+                }}>Switch to another workspace</div>
+                {switcherWorkspaces.map(k => (
+                  <MenuItem
+                    key={k}
+                    onClick={() => { setWorkspaceMenuOpen(false); props.onSwitchWorkspace?.(k); }}
+                  >
+                    <div style={{ fontWeight: 700 }}>{WORKSPACES[k].label}</div>
+                    <div style={{ fontSize: 11, color: colors.textDim }}>{WORKSPACES[k].description}</div>
+                  </MenuItem>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <IconButton title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"} onClick={toggleFullscreen}>
           {isFullscreen ? "⛶" : "⛶"}
         </IconButton>
@@ -495,7 +623,9 @@ export function WorkspaceScreen(props: Props) {
                 boxShadow: "0 12px 32px rgba(0,0,0,0.45)",
               }}
             >
-              <MenuItem onClick={() => { setMenuOpen(false); props.onSwitchOutlet(); }}>Switch outlet / counter</MenuItem>
+              {(props.outletCount ?? 2) > 1 && (
+                <MenuItem onClick={() => { setMenuOpen(false); props.onSwitchOutlet(); }}>Switch outlet / counter</MenuItem>
+              )}
               <MenuItem onClick={() => { setMenuOpen(false); props.onOpenSettings(); }}>Connection settings</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); setActive("settings"); }}>App settings…</MenuItem>
               <MenuItem onClick={() => { setMenuOpen(false); setShowSync(true); }}>Sync status…</MenuItem>
@@ -518,60 +648,116 @@ export function WorkspaceScreen(props: Props) {
         gridArea: "sidebar",
         background: "#0d121b",
         borderRight: `1px solid ${colors.border}`,
-        padding: "12px 10px",
-        display: "flex", flexDirection: "column", gap: 4,
+        padding: "10px 8px",
+        display: "flex", flexDirection: "column", gap: 2,
         overflowY: "auto",
       }}>
-        {NAV.filter(n => ROLE_NAV[appPrefs.role].has(n.key)).map((n) => {
-          const isActive = active === n.key;
-          const badge = badgeFor(n.key);
+        {(() => {
+          // The cashier rail mirrors the DesktopShell convention: a small
+          // pinned "Favorites" section at the top, followed by the role's
+          // permitted nav. Each tile carries a tiny pin/unpin star so the
+          // cashier can curate their rail without leaving the POS.
+          const visible = NAV.filter(n => hasAnyPermission(access, NAV_PERMS[n.key]));
+          const byKey = new Map(visible.map(n => [n.key, n]));
+          const favEntries = fav.favorites
+            .map(k => byKey.get(k as NavKey))
+            .filter((n): n is NavEntry => !!n);
+          const recentEntries = fav.recents
+            .map(k => byKey.get(k as NavKey))
+            .filter((n): n is NavEntry => !!n)
+            .filter(n => !fav.favorites.includes(n.key))
+            .slice(0, 3);
+
+          const renderTile = (n: NavEntry, key: string) => {
+            const isActive = active === n.key;
+            const badge = badgeFor(n.key);
+            const pinned = fav.isFavorite(n.key);
+            return (
+              <div key={key} style={{ position: "relative" }}>
+                <button
+                  onClick={() => goTo(n.key)}
+                  title={n.label}
+                  style={{
+                    width: "100%", position: "relative",
+                    background: isActive
+                      ? `linear-gradient(135deg, ${colors.brand} 0%, ${colors.brandHover} 100%)`
+                      : "transparent",
+                    color: isActive ? "#fff" : colors.textDim,
+                    border: 0, borderRadius: 10,
+                    padding: "10px 4px",
+                    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                    fontSize: 11, fontWeight: 600,
+                    cursor: "pointer",
+                    boxShadow: isActive ? `0 4px 14px ${colors.brand}55` : "none",
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) (e.currentTarget.style.background = colors.panelAlt);
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) (e.currentTarget.style.background = "transparent");
+                  }}
+                >
+                  <span style={{
+                    width: 28, height: 28,
+                    display: "grid", placeItems: "center",
+                    color: isActive ? "#fff" : colors.textDim,
+                  }}>{n.icon}</span>
+                  <span>{n.label}</span>
+                  {badge != null && (
+                    <span style={{
+                      position: "absolute", top: 6, right: 10,
+                      minWidth: 18, height: 18, padding: "0 5px",
+                      background: n.key === "hardware" ? colors.danger : colors.brand,
+                      color: "#fff", borderRadius: 999,
+                      fontSize: 10, fontWeight: 800,
+                      display: "grid", placeItems: "center",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                      border: `2px solid #0d121b`,
+                    }}>{badge > 99 ? "99+" : badge}</span>
+                  )}
+                </button>
+                {/* Pin / unpin star — top-left so it doesn't collide with
+                    the unread badge in the top-right. */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); fav.toggleFavorite(n.key); }}
+                  title={pinned ? "Unpin from favorites" : "Pin to favorites"}
+                  aria-label={pinned ? `Unpin ${n.label}` : `Pin ${n.label}`}
+                  style={{
+                    position: "absolute", top: 4, left: 4,
+                    width: 18, height: 18, padding: 0,
+                    background: "transparent", border: 0,
+                    color: pinned ? "#fbbf24" : "transparent",
+                    cursor: "pointer", fontSize: 12, lineHeight: 1,
+                  }}
+                  onMouseEnter={(e) => { if (!pinned) e.currentTarget.style.color = colors.textMuted; }}
+                  onMouseLeave={(e) => { if (!pinned) e.currentTarget.style.color = "transparent"; }}
+                >{pinned ? "★" : "☆"}</button>
+              </div>
+            );
+          };
+
           return (
-            <button
-              key={n.key}
-              onClick={() => setActive(n.key)}
-              title={n.label}
-              style={{
-                position: "relative",
-                background: isActive
-                  ? `linear-gradient(135deg, ${colors.brand} 0%, ${colors.brandHover} 100%)`
-                  : "transparent",
-                color: isActive ? "#fff" : colors.textDim,
-                border: 0, borderRadius: 10,
-                padding: "10px 4px",
-                display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-                fontSize: 11, fontWeight: 600,
-                cursor: "pointer",
-                boxShadow: isActive ? `0 4px 14px ${colors.brand}55` : "none",
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget.style.background = colors.panelAlt);
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget.style.background = "transparent");
-              }}
-            >
-              <span style={{
-                width: 28, height: 28,
-                display: "grid", placeItems: "center",
-                color: isActive ? "#fff" : colors.textDim,
-              }}>{n.icon}</span>
-              <span>{n.label}</span>
-              {badge != null && (
-                <span style={{
-                  position: "absolute", top: 6, right: 10,
-                  minWidth: 18, height: 18, padding: "0 5px",
-                  background: n.key === "hardware" ? colors.danger : colors.brand,
-                  color: "#fff", borderRadius: 999,
-                  fontSize: 10, fontWeight: 800,
-                  display: "grid", placeItems: "center",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
-                  border: `2px solid #0d121b`,
-                }}>{badge > 99 ? "99+" : badge}</span>
+            <>
+              {favEntries.length > 0 && (
+                <>
+                  <NavSectionLabel>Favorites</NavSectionLabel>
+                  {favEntries.map((n, i) => renderTile(n, `fav-${n.key}-${i}`))}
+                </>
               )}
-            </button>
+              {recentEntries.length > 0 && (
+                <>
+                  <NavSectionLabel>Recent</NavSectionLabel>
+                  {recentEntries.map((n, i) => renderTile(n, `rec-${n.key}-${i}`))}
+                </>
+              )}
+              {favEntries.length > 0 || recentEntries.length > 0 ? (
+                <NavSectionLabel>All</NavSectionLabel>
+              ) : null}
+              {visible.map(n => renderTile(n, `all-${n.key}`))}
+            </>
           );
-        })}
+        })()}
       </nav>
 
       {/* ─── Main pane ──────────────────────────────────────────────── */}
@@ -675,6 +861,16 @@ export function WorkspaceScreen(props: Props) {
         />
       )}
       {locked && <LockOverlay user={props.user} onUnlock={() => setLocked(false)} />}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        items={paletteItems}
+        access={access}
+        favorites={fav.favorites}
+        recents={fav.recents}
+        workspaceLabel="Cashier"
+        onPick={(item) => goTo(item.key as NavKey)}
+      />
       {pinGate && (
         <ManagerPinModal
           reason={pinGate.reason}
@@ -782,7 +978,17 @@ function MenuItem({ children, onClick, danger }: { children: React.ReactNode; on
 
 // ─── Lock overlay ────────────────────────────────────────────────────────────
 
-function LockOverlay({ user, onUnlock }: { user: User; onUnlock: () => void }) {
+function NavSectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontSize: 9, textTransform: "uppercase", letterSpacing: 0.6,
+      color: colors.textMuted, padding: "10px 0 4px",
+      textAlign: "center", fontWeight: 700,
+    }}>{children}</div>
+  );
+}
+
+export function LockOverlay({ user, onUnlock }: { user: User; onUnlock: () => void }) {
   // PIN-backed lock when a PIN is configured under App settings → Security.
   // When no PIN is set, falls back to a soft lock (Enter / Unlock button)
   // — the OS/network login already gated terminal access.
