@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useOrderDetail, usePayOrder, useUpdateOrder, useRestaurantInfo, useKitchenTickets, useRestaurantId } from "@/lib/hooks";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, isOfflineQueuedResult } from "@/lib/api";
 import { useDeliveryExecutives, useAssignRider } from "@/lib/delivery";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Printer, ChefHat, Banknote, Smartphone } from "lucide-react";
+import { CreditCard, ArrowRight, AlertTriangle, Loader2, AlertCircle, Truck, Printer, ChefHat } from "lucide-react";
 import { cn, formatOrderNumber } from "@/lib/utils";
 import { printOrder, type PrintSize } from "@/lib/printOrder";
 import type { KitchenTicket } from "@/lib/types";
 import { ServiceTimerPanel } from "@/components/ServiceTimerPanel";
+import { PaymentModal, type Totals, type PaymentConfirmDetails } from "@/components/PaymentModal";
 
 /**
  * Print the rendered bill HTML using an off-screen iframe so we don't
@@ -154,27 +154,57 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
     }
   };
 
-  const [showPayPicker, setShowPayPicker] = useState(false);
+  const [showPayModal, setShowPayModal] = useState(false);
   const handlePay = () => {
     if (!order) return;
-    setShowPayPicker(true);
+    setShowPayModal(true);
   };
-  const submitPayment = async (method: "cash" | "card" | "upi") => {
+
+  const handleConfirmPayment = async (method: string, details?: PaymentConfirmDetails) => {
     if (!order) return;
-    setShowPayPicker(false);
     try {
-      await payOrder.mutateAsync({ id: order.id, paymentMethod: method });
+      const result = await payOrder.mutateAsync({
+        id: order.id,
+        paymentMethod: method,
+        stripePaymentIntentId: details?.stripePaymentIntentId,
+        razorpayPaymentId: details?.razorpayPaymentId,
+        razorpayOrderId: details?.razorpayOrderId,
+        razorpaySignature: details?.razorpaySignature,
+        tipAmount: details?.tipAmount,
+      });
       refreshDetail();
-      toast({ title: `Payment recorded (${method.toUpperCase()})` });
+      if (isOfflineQueuedResult(result)) {
+        toast({ title: "Payment saved offline", description: `${formatOrderNumber(order.orderNumber)} will be settled when you reconnect.` });
+      } else {
+        toast({ title: "Payment confirmed", description: `${formatOrderNumber(order.orderNumber)} marked as paid.` });
+      }
+      setShowPayModal(false);
       onClose();
     } catch (e) {
-      toast({
-        title: "Payment failed",
-        description: e instanceof Error ? e.message : undefined,
-        variant: "destructive",
-      });
+      // PaymentModal already surfaces its own failure toast and keeps
+      // itself open on the relevant stage. Rethrow so it can recover.
+      throw e;
     }
   };
+
+  const handleTerminalConfirmed = async (_info: { providerRef: string; receiptUrl: string | null }) => {
+    if (!order) return;
+    refreshDetail();
+    toast({
+      title: "Terminal payment confirmed",
+      description: `${formatOrderNumber(order.orderNumber)} marked as paid.`,
+    });
+    setShowPayModal(false);
+    onClose();
+  };
+
+  const paymentTotals: Totals | null = order ? {
+    subtotal: Number(order.subtotal ?? 0),
+    taxAmount: Number(order.taxAmount ?? 0),
+    serviceCharge: Number(order.serviceCharge ?? 0),
+    discountAmount: Number(order.discountAmount ?? 0),
+    totalAmount: Number(order.totalAmount ?? 0),
+  } : null;
 
   const handleCancel = async () => {
     if (!order) return;
@@ -475,50 +505,17 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
         )}
       </SheetContent>
 
-      <Dialog open={showPayPicker} onOpenChange={setShowPayPicker}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Take payment</DialogTitle>
-            <DialogDescription>
-              {order ? `How is order #${formatOrderNumber(order.orderNumber)} being paid?` : "Select a payment method"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-3 gap-2 py-2">
-            <Button
-              variant="outline"
-              className="flex h-20 flex-col items-center justify-center gap-1"
-              onClick={() => submitPayment("cash")}
-              disabled={payOrder.isPending}
-            >
-              <Banknote className="h-6 w-6" />
-              <span className="text-sm font-medium">Cash</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="flex h-20 flex-col items-center justify-center gap-1"
-              onClick={() => submitPayment("card")}
-              disabled={payOrder.isPending}
-            >
-              <CreditCard className="h-6 w-6" />
-              <span className="text-sm font-medium">Card</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="flex h-20 flex-col items-center justify-center gap-1"
-              onClick={() => submitPayment("upi")}
-              disabled={payOrder.isPending}
-            >
-              <Smartphone className="h-6 w-6" />
-              <span className="text-sm font-medium">UPI</span>
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowPayPicker(false)} disabled={payOrder.isPending}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showPayModal && order && paymentTotals && (
+        <PaymentModal
+          totals={paymentTotals}
+          orderId={order.id}
+          onClose={() => setShowPayModal(false)}
+          onConfirm={handleConfirmPayment}
+          onTerminalConfirmed={handleTerminalConfirmed}
+          isPending={payOrder.isPending}
+          hasCustomer={!!(order.customerId || order.customerPhone)}
+        />
+      )}
     </Sheet>
   );
 }
