@@ -298,6 +298,7 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
   const canPay = order && order.paymentStatus === "unpaid" && order.status !== "cancelled";
 
   return (
+    <>
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
         {isLoading ? (
@@ -504,18 +505,19 @@ export function OrderDetailDrawer({ orderId, onClose }: OrderDetailDrawerProps) 
           </>
         )}
       </SheetContent>
-
-      {showPayModal && order && paymentTotals && (
-        <PaymentModal
-          totals={paymentTotals}
-          orderId={order.id}
-          onClose={() => setShowPayModal(false)}
-          onConfirm={handleConfirmPayment}
-          onTerminalConfirmed={handleTerminalConfirmed}
-          isPending={payOrder.isPending}
-          hasCustomer={!!(order.customerId || order.customerPhone)}
-        />
-      )}
     </Sheet>
+
+    {showPayModal && order && paymentTotals && (
+      <PaymentModal
+        totals={paymentTotals}
+        orderId={order.id}
+        onClose={() => setShowPayModal(false)}
+        onConfirm={handleConfirmPayment}
+        onTerminalConfirmed={handleTerminalConfirmed}
+        isPending={payOrder.isPending}
+        hasCustomer={!!(order.customerId || order.customerPhone)}
+      />
+    )}
+    </>
   );
 }
