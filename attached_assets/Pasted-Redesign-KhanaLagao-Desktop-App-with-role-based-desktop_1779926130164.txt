@@ -1,0 +1,486 @@
+Redesign KhanaLagao Desktop App with role-based desktop modes and offline sync.
+
+Current requirement:
+Desktop app should not show Back Office as a normal module to every user. The desktop app should open different UI based on logged-in user role, same like mobile app role-based flow.
+
+Cashier should see only POS.
+Admin/Manager should see full manager/admin office with restaurant setup, menu, stock, payments, reports, customers, suppliers, expenses, logs, database, etc.
+Inventory staff should see stock/purchase/supplier features.
+Accountant should see finance/reports/payments/bank reconciliation.
+Owner should see all features.
+
+Important:
+- Do not show admin/back-office features to cashier unless permission allowed.
+- Role-based UI must work after login.
+- Use same backend data as web admin.
+- Desktop app should work offline where possible and sync when online.
+- No mock data.
+- No dead buttons.
+- No raw ID inputs.
+- No infinite loading.
+
+====================================================
+1. ROLE-BASED DESKTOP ENTRY FLOW
+====================================================
+
+After login:
+1. Detect user role.
+2. Detect assigned outlet/branch.
+3. Detect permissions.
+4. Open correct desktop mode.
+
+Role modes:
+
+A. Cashier Mode
+- Opens directly to POS.
+- Shows only:
+  POS
+  Orders
+  Payments
+  Shift
+  Hardware if allowed
+  Logout
+
+B. Manager/Admin Mode
+- Opens Manager Office dashboard.
+- Can access:
+  POS
+  Orders
+  Tables
+  Customers
+  Menu
+  Inventory
+  Purchase
+  Suppliers
+  Payments
+  Expenses
+  Reports
+  Hardware
+  Settings
+  Logs if allowed
+
+C. Owner Mode
+- Full access to everything.
+
+D. Inventory Staff Mode
+- Opens Inventory dashboard.
+- Shows:
+  Raw Materials
+  Menu Item Stock
+  Warehouse
+  Stock Transfer/Issue
+  Purchase
+  Supplier
+  Wastage
+  Low Stock
+  Inventory Reports
+
+E. Accountant Mode
+- Opens Finance dashboard.
+- Shows:
+  Payments
+  Voucher
+  Expense Type
+  Expense
+  Cards
+  Wallet
+  Bank Reconciliation
+  Accounting Reports
+  POS Report
+  Work Period Report
+  Settlements
+
+F. Delivery Staff Mode
+- Opens Delivery dashboard if desktop access allowed.
+- Shows delivery orders and COD settlement only.
+
+If user has multiple roles:
+Show role switcher after login.
+
+If user has multiple outlets:
+Show outlet selector.
+
+====================================================
+2. CASHIER DESKTOP POS MODE
+====================================================
+
+Cashier Mode should be fast and clean.
+
+Show:
+- Full-screen POS
+- Orders
+- Payments
+- Shift
+- Hardware/printer if allowed
+
+Hide:
+- Restaurant Info
+- Settings
+- Categories
+- Menu Items
+- Raw Materials
+- Supplier
+- Purchase
+- Expense
+- Database
+- Logs
+unless permission allows.
+
+Cashier POS features:
+- Dine-in/takeaway/delivery
+- Item search
+- Cart
+- KOT
+- Bill
+- Bill & Pay
+- Hold/Recall
+- Split payment
+- Calculator
+- Print/reprint
+- Shift open/close
+- Failed print queue
+
+====================================================
+3. MANAGER / ADMIN DESKTOP OFFICE
+====================================================
+
+Manager/Admin should see a modern office dashboard, not old blue buttons.
+
+Admin Office should include grouped cards:
+
+Restaurant Setup:
+- Restaurant Info
+- Registration
+- Settings
+- Bill Templates
+- Tax/GST/FSSAI
+- Branch/Outlet Settings
+
+Menu Setup:
+- Categories
+- Menu Items
+- Menu Items Stock
+- Recipe
+- Add-ons
+- Modifiers
+- Combos
+- Item Availability
+
+Kitchen & Tables:
+- Kitchen/Section
+- Tables
+- Floor Plan
+- KOT Settings
+- Delivery Person
+- Work Period
+
+Inventory:
+- Raw Materials
+- Warehouse
+- Warehouse Type
+- Stock Transfer/Issue
+- Purchase
+- Supplier
+- Wastage
+- Low Stock Alerts
+
+Customers:
+- Customers Entry
+- Credit Customer
+- Customer Ledger
+- Loyalty/Wallet
+- Customer Notes
+
+Finance:
+- Payment
+- Voucher
+- Expense Type
+- Expense
+- Cards
+- Wallet
+- Bank Reconciliation
+- Refunds
+- Settlements
+
+Reports:
+- POS Report
+- Accounting Reports
+- Work Period Report
+- Sales Report
+- Item Sales Report
+- Inventory Report
+- Customer Report
+- Expense Report
+
+Marketing:
+- Send SMS
+- WhatsApp/SMS/email campaigns if available
+- Templates
+- Coupons
+
+System:
+- Database
+- Backup/Restore
+- Logs
+- Audit Logs
+- Sync Status
+- App Version
+- Failed Jobs
+
+====================================================
+4. OFFLINE-FIRST DESKTOP SUPPORT
+====================================================
+
+Add offline support for desktop app.
+
+Offline should support:
+
+Cashier/POS offline:
+- Create cart
+- Add items
+- Hold bill
+- Print local bill/KOT if printer available
+- Save offline order draft
+- Save failed print jobs
+- Continue cashier shift locally
+- Show offline banner
+
+Offline should NOT allow:
+- Online payments
+- Payment provider verification
+- Cloud sync actions
+- SMS/WhatsApp/email sending
+- Real-time QR order acceptance unless already synced
+
+When online returns:
+- Sync offline orders
+- Sync held bills
+- Sync print status
+- Sync cash shift actions
+- Sync expenses/purchases created offline if allowed
+- Resolve conflicts
+
+Conflict handling:
+- If item price changed while offline, keep original offline bill snapshot.
+- If order number conflict, generate final server order number during sync.
+- If stock changed, sync order and flag stock conflict if needed.
+- Show sync review screen for failed/conflicted items.
+
+====================================================
+5. LOCAL DATABASE / STORAGE
+====================================================
+
+Use secure local desktop storage for offline data.
+
+Store locally:
+- Current session
+- Outlet/counter
+- Menu cache
+- Category cache
+- Table cache
+- Customer quick cache
+- Current cart
+- Held bills
+- Offline orders
+- Print queue
+- Shift actions
+- Sync queue
+
+Do not store:
+- Provider secrets
+- Payment secrets
+- Raw card data
+- Super admin credentials
+
+Local data should be encrypted where possible.
+
+====================================================
+6. SYNC CENTER
+====================================================
+
+Add Sync Center in desktop app.
+
+Show:
+- Online/offline status
+- Last sync time
+- Pending orders
+- Pending print jobs
+- Pending expenses
+- Pending purchases
+- Failed sync
+- Conflict items
+
+Actions:
+- Sync now
+- Retry failed
+- View conflict
+- Resolve conflict
+- Clear safe cache with permission
+
+Sync statuses:
+- Pending
+- Syncing
+- Synced
+- Failed
+- Conflict
+
+====================================================
+7. ROLE-BASED LEFT MENU
+====================================================
+
+Left menu should change by role.
+
+Cashier menu:
+- POS
+- Orders
+- Payments
+- Shift
+- Hardware
+- Sync
+- Settings
+
+Manager menu:
+- Dashboard
+- POS
+- Orders
+- Tables
+- Menu
+- Inventory
+- Customers
+- Finance
+- Reports
+- Hardware
+- Sync
+- Settings
+
+Owner menu:
+- Dashboard
+- POS
+- Orders
+- Tables
+- Menu
+- Inventory
+- Purchase
+- Customers
+- Finance
+- Marketing
+- Reports
+- System
+- Hardware
+- Sync
+- Settings
+
+Inventory menu:
+- Inventory
+- Raw Materials
+- Purchase
+- Supplier
+- Warehouse
+- Stock Transfer
+- Reports
+- Sync
+
+Accountant menu:
+- Finance
+- Payments
+- Expense
+- Voucher
+- Bank Reconciliation
+- Reports
+- Sync
+
+====================================================
+8. PERMISSION RULES
+====================================================
+
+Every screen/action must check permission:
+
+View
+Create
+Edit
+Delete
+Print
+Export
+Approve
+Void
+Refund
+Discount
+Reopen
+Close Shift
+Backup
+Restore
+
+Manager PIN required for:
+- Refund
+- High discount
+- Void item
+- Cancel paid order
+- Reopen bill
+- Restore database
+- Delete records
+- Cash mismatch approval
+
+====================================================
+9. ADMIN/OFFICE UI DESIGN
+====================================================
+
+Admin/Manager Office UI:
+- Modern grouped cards
+- Big icons with labels
+- Search everything
+- Favorites
+- Recently used
+- Outlet selector
+- Sync status
+- Permission badges
+- Fast tables/forms
+- Drawer forms
+- No old blue button style
+
+Search should find:
+- Settings
+- Menu items
+- Categories
+- Customers
+- Suppliers
+- Raw materials
+- Reports
+- Logs
+
+====================================================
+10. DATA CONSISTENCY
+====================================================
+
+Use same calculation everywhere:
+- POS
+- Web admin
+- Mobile app
+- Desktop app
+- Bill print
+- PDF
+- Reports
+
+Bills, taxes, discounts, and payments should not differ across web/mobile/desktop.
+
+Reprint must use saved bill snapshot.
+
+====================================================
+11. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Desktop app opens role-based UI after login.
+- Cashier sees POS-focused mode only.
+- Manager/Admin sees full office features.
+- Owner gets full access.
+- Inventory/accountant see their own dashboards.
+- All options from old POS back-office reference are included for admin/manager:
+  Restaurant Info, Settings, Kitchen/Section, Categories, Tables, Menu Items, Menu Items Stock, Payment, Voucher, Recipe, Supplier, Stock Transfer/Issue, Purchase, Send SMS, Bank Reconciliation, Database, Accounting Reports, Customers Entry, Credit Customer, Delivery Person, Raw Materials, POS Report, Expense Type, Work Period, Expense, Cards, Wallet, Warehouse, Work Period Report, Registration, Warehouse Type, Logs.
+- Offline POS draft/order/print queue works.
+- Sync Center works when online returns.
+- Conflicts are handled safely.
+- Role permissions work.
+- No mock data.
+- No dead buttons.
+- No raw IDs.
+- Build works on Windows and macOS.

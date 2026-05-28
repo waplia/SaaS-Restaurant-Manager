@@ -1,0 +1,651 @@
+Update KhanaLagao Desktop App to include all web/admin/app features with role-based desktop experience and offline sync.
+
+Current requirement:
+The desktop app should not only include the old-style Back Office options from the reference image. It should include all relevant features already available in KhanaLagao web admin and mobile app, especially the features we already planned for POS, restaurant admin, manager, cashier, waiter, inventory, accountant, delivery, marketing, hardware, providers, app downloads, bill templates, notifications, campaigns, AI, QR menu, and settings.
+
+Important:
+- Do not create a small limited desktop version.
+- Desktop app should use the same real backend modules as web admin.
+- Desktop app should open different workspace based on login role.
+- Cashier should open POS-focused workspace.
+- Manager/Admin/Owner should open full Manager Office workspace.
+- Inventory/accountant/marketing/delivery users should open their own role workspace.
+- All features should be permission-based.
+- Offline support should work where possible.
+- Sync everything when online.
+- No mock data.
+- No dead buttons.
+- No raw ID input.
+- No infinite loading.
+- Do not remove existing web/mobile features.
+
+====================================================
+1. ROLE-BASED DESKTOP ENTRY
+====================================================
+
+After login:
+- Detect user role.
+- Detect assigned restaurant/outlet/branch.
+- Detect permissions.
+- Detect enabled modules/plan.
+- Open the correct desktop workspace.
+
+Workspaces:
+
+A. Cashier Workspace
+- POS
+- Orders
+- Payments
+- Shift
+- Hardware/Printer if allowed
+- QR Orders if allowed
+- Sync Center
+- Logout
+
+B. Manager/Admin/Owner Workspace
+- Dashboard
+- POS
+- Orders
+- Tables
+- Kitchen/KOT
+- QR Orders
+- Menu
+- Customers
+- Inventory
+- Purchase
+- Suppliers
+- Finance
+- Expenses
+- Staff
+- Reports
+- Growth Engine
+- Campaigns
+- Providers
+- Hardware
+- Bill Templates
+- App Downloads
+- Notifications
+- Khana AI
+- Sync Center
+- Settings
+- Logs/System
+
+C. Inventory Workspace
+- Raw Materials
+- Menu Item Stock
+- Warehouse
+- Warehouse Type
+- Stock Transfer/Issue
+- Purchase
+- Supplier
+- Wastage
+- Low Stock
+- Vendor Invoice OCR if enabled
+- Inventory Reports
+- Sync Center
+
+D. Accountant Workspace
+- Payments
+- Voucher
+- Expense Type
+- Expense
+- Cards
+- Wallet
+- Bank Reconciliation
+- Refunds
+- Settlements
+- Accounting Reports
+- POS Report
+- Work Period Report
+- P&L
+- Sync Center
+
+E. Marketing Workspace
+- Growth Engine
+- Campaigns
+- WhatsApp Campaigns
+- SMS Campaigns
+- Email Campaigns
+- Push Campaigns
+- Templates
+- Coupons
+- Customer Segments
+- Reviews
+- Email Templates
+- WhatsApp Templates
+- Sync Center
+
+F. Delivery Workspace
+- Assigned delivery orders
+- Delivery status
+- Customer call
+- Map link
+- COD collection
+- Cash handover
+- Delivery reports
+
+If user has multiple roles:
+Show role switcher.
+
+If user has multiple outlets:
+Show outlet switcher.
+
+====================================================
+2. DESKTOP LEFT MENU BY ROLE
+====================================================
+
+Create a modern left menu with large icons and names.
+
+Owner/Admin menu:
+- Dashboard
+- POS
+- Orders
+- Tables
+- Kitchen
+- QR Orders
+- Menu
+- Customers
+- Inventory
+- Purchase
+- Finance
+- Staff
+- Growth
+- Reports
+- Hardware
+- Providers
+- Settings
+- Sync
+
+Cashier menu:
+- POS
+- Orders
+- Payments
+- Shift
+- Hardware
+- Sync
+
+Inventory menu:
+- Inventory
+- Raw Materials
+- Purchase
+- Supplier
+- Warehouse
+- Reports
+- Sync
+
+Accountant menu:
+- Finance
+- Payments
+- Expenses
+- Bank Reconciliation
+- Reports
+- Sync
+
+Marketing menu:
+- Campaigns
+- Customers
+- Templates
+- Coupons
+- Reviews
+- Reports
+- Sync
+
+Every menu item should show only if user has permission and module is enabled.
+
+====================================================
+3. INCLUDE OLD BACK OFFICE IMAGE OPTIONS TOO
+====================================================
+
+Include all options visible in the old POS reference image, but modernize and group them.
+
+Must include:
+- Restaurant Info
+- Settings
+- Kitchen/Section
+- Categories
+- Tables
+- Menu Items
+- Menu Items Stock
+- Payment
+- Voucher
+- Recipe
+- Supplier
+- Stock Transfer/Issue
+- Purchase
+- Send SMS
+- Bank Reconciliation
+- Database
+- Accounting Reports
+- Customers Entry
+- Credit Customer
+- Delivery Person
+- Raw Materials
+- POS Report
+- Expense Type
+- Work Period
+- Expense
+- Cards
+- Wallet
+- Warehouse
+- Work Period Report
+- Registration
+- Warehouse Type
+- Logs
+
+Do not make it old blue-button UI.
+Use modern grouped cards, search, icons, filters, and permissions.
+
+====================================================
+4. INCLUDE ALL WEB ADMIN FEATURES
+====================================================
+
+Desktop Manager/Admin/Owner should include all relevant web admin features:
+
+Restaurant Setup:
+- Restaurant profile
+- Outlet/branch management
+- Business hours
+- GST/FSSAI
+- Billing settings
+- Tax settings
+- Service charge
+- QR menu settings
+- Table QR design/download
+- App download links
+- Bill templates
+- Email/SMS/WhatsApp template settings if allowed
+
+Menu:
+- Categories
+- Menu items
+- Food images
+- Image library
+- Variants
+- Add-ons
+- Modifiers
+- Combos
+- Dynamic pricing
+- Item availability
+- Recipe mapping
+- Menu import/export
+- Menu aliases
+- Stock linked items
+
+POS / Orders:
+- Full desktop POS
+- Dine-in
+- Takeaway
+- Delivery
+- QR orders
+- Reservations
+- Tiffin/catering if enabled
+- Hold/recall
+- Bill & Pay
+- Send KOT
+- Complete Order
+- Split bill
+- Refund/void/cancel
+- Payment verification
+- Customer display
+
+Kitchen:
+- KOT
+- Kitchen sections
+- Station-wise KOT
+- KDS screen
+- Printer mapping
+- Kitchen timers
+- Delay reasons
+- Reprint KOT
+
+Tables:
+- Floor plan
+- Table status
+- Merge/transfer
+- Split bill
+- QR per table
+- Running amount
+- Bill requested status
+
+Customers:
+- Customer entry
+- Customer profile
+- Customer order history
+- Credit customer
+- Customer ledger
+- Wallet
+- Loyalty
+- Notes
+- WhatsApp/SMS/email actions
+
+Inventory:
+- Raw materials
+- Warehouse
+- Warehouse type
+- Stock transfer/issue
+- Stock adjustment
+- Wastage
+- Low stock alerts
+- Recipe costing
+- Vendor invoice OCR
+- Stock reports
+
+Purchase/Supplier:
+- Supplier
+- Purchase order
+- Goods received
+- Supplier payment
+- Supplier ledger
+- Purchase reports
+
+Finance:
+- Payment methods
+- Payment terminal settings
+- Voucher
+- Expense type
+- Expense
+- Cards
+- Wallet
+- Refunds
+- Settlements
+- Bank reconciliation
+- P&L
+- Accounting reports
+
+Staff:
+- Staff list
+- Roles/permissions
+- Attendance
+- Shift
+- Payroll if enabled
+- Leave if enabled
+- Staff insights
+
+Growth/Marketing:
+- Campaigns
+- WhatsApp/SMS/email/push
+- Coupons
+- Loyalty campaigns
+- Review requests
+- Customer segmentation
+- Templates
+- Email templates
+- WhatsApp templates
+- Campaign analytics
+
+Providers:
+- Payment providers
+- PhonePe EDC/Dynamic QR
+- Razorpay/Cashfree/Stripe if configured
+- SMS/2Factor
+- WhatsApp provider
+- Email provider
+- Push notification provider
+- Google Sign-In/Firebase if configured
+- AI providers/models
+
+Khana AI:
+- AI demand forecast
+- AI item description
+- AI feedback analysis
+- AI inventory assistant
+- AI menu import
+- AI nutrition
+- AI recipe optimizer
+- AI review draft/reply
+- AI sales insights
+- AI setup wizard
+- AI upsell suggestions
+- AI voice order
+- Dashboard assistant
+- Email AI generation
+- Fraud alert summary
+- Kitchen performance summary
+- Staff insights
+- Vendor invoice OCR
+- AI usage/cost logs
+
+Hardware:
+- Bill printer
+- KOT printer
+- Kitchen station printer
+- Failed print queue
+- Retry prints
+- Cash drawer
+- Barcode scanner
+- Customer display
+- Terminal mapping
+- Test print
+
+Reports:
+- POS report
+- Accounting reports
+- Work period report
+- Sales report
+- Item sales
+- Category sales
+- Cashier report
+- Payment report
+- Tax/GST report
+- Discount report
+- Refund report
+- Cancelled order report
+- Inventory report
+- Purchase report
+- Supplier report
+- Customer report
+- Credit customer report
+- Expense report
+- Profit/loss report
+- AI usage report
+- Campaign report
+
+System:
+- Database
+- Backup/restore
+- Logs
+- Audit logs
+- Device sessions
+- Sync status
+- Failed jobs
+- App version
+- Update check
+
+====================================================
+5. INCLUDE MOBILE ROLE FEATURES WHERE RELEVANT
+====================================================
+
+Desktop should also include the same role-based idea from mobile app:
+
+Waiter/Service features if desktop role enabled:
+- Assigned tables
+- Table requests
+- Add order
+- Send KOT
+- Mark served
+- Request bill
+
+Kitchen/Chef features if enabled:
+- KOT board
+- Preparing/ready/delayed
+- Item-level ready
+- Kitchen sound alerts
+
+Cashier features:
+- POS
+- Billing queue
+- Payment
+- Shift close
+- Printer status
+
+Inventory features:
+- Stock actions
+- Stock receive
+- Purchase
+- Supplier
+- Low stock
+
+Marketing features:
+- Campaigns
+- Templates
+- Customers
+- Reviews
+
+Accountant features:
+- Finance
+- Expenses
+- Settlements
+- Reports
+
+Delivery features:
+- Assigned orders
+- COD collection
+- Delivery proof/status
+
+====================================================
+6. OFFLINE-FIRST DESKTOP SUPPORT
+====================================================
+
+Desktop app should work offline where possible.
+
+Offline allowed:
+- Login only if user/session was previously synced.
+- View cached menu/categories/tables/customers.
+- Create POS cart.
+- Hold bill locally.
+- Create offline order draft.
+- Print KOT/bill locally if printer available.
+- Save failed print jobs.
+- Cash payment offline.
+- Add expense draft.
+- Add stock adjustment draft if permission allows.
+- Continue shift locally.
+
+Offline not allowed:
+- First-time login.
+- Online payments/terminal verification.
+- SMS/WhatsApp/email sending.
+- Provider configuration changes.
+- Cloud-only AI actions.
+- Live QR order acceptance unless already cached/synced.
+
+When online returns:
+- Sync offline orders.
+- Sync held bills.
+- Sync shift actions.
+- Sync cash payments.
+- Sync print status.
+- Sync expenses/purchases/stock actions.
+- Sync audit logs.
+- Retry failed jobs.
+- Show conflicts.
+
+Conflict rules:
+- Preserve bill snapshot for offline orders.
+- Keep offline item price used at billing time.
+- Server assigns final internal order ID if needed.
+- If stock changed, sync order and flag stock conflict.
+- If customer changed, merge safely or show conflict.
+- Never duplicate orders during retry.
+- Use idempotency keys for every offline action.
+
+====================================================
+7. SYNC CENTER
+====================================================
+
+Add Sync Center for desktop.
+
+Show:
+- Online/offline status
+- Last sync time
+- Pending orders
+- Pending held bills
+- Pending payments
+- Pending prints
+- Pending expenses
+- Pending stock actions
+- Failed syncs
+- Conflicts
+
+Actions:
+- Sync now
+- Retry failed
+- Resolve conflict
+- View logs
+- Clear safe cache with permission
+
+====================================================
+8. LOCAL STORAGE / DATABASE
+====================================================
+
+Use secure local desktop storage.
+
+Cache:
+- User session
+- Restaurant/outlet/counter
+- Permissions
+- Menu
+- Categories
+- Tables
+- Customers quick cache
+- POS cart
+- Held bills
+- Offline orders
+- Print queue
+- Shift actions
+- Sync queue
+- Settings
+
+Do not store:
+- Payment provider secrets
+- Full card data
+- Super admin secrets
+- Sensitive provider credentials
+
+Encrypt local data where possible.
+
+====================================================
+9. UI/UX DESIGN
+====================================================
+
+Design:
+- Modern desktop app shell
+- Role-based left menu with big icons/names
+- Full-screen POS mode
+- Manager/Admin office dashboard for admin roles
+- Grouped cards for admin features
+- Search everything with Ctrl+K
+- Favorites and recent tools
+- Permission badges
+- Online/offline/sync badge
+- Clean tables/forms
+- Drawer forms
+- Loading skeletons
+- Clear empty states
+- Dark mode and light mode if possible
+- Compact mode and touch mode
+
+Admin office should not look like old blue buttons.
+It should look like a premium modern restaurant operations suite.
+
+====================================================
+10. ACCEPTANCE CRITERIA
+====================================================
+
+Complete only when:
+- Desktop app opens role-based workspace after login.
+- Cashier sees POS-only workspace.
+- Admin/Manager/Owner sees all web admin features relevant to restaurant operations.
+- Inventory/accountant/marketing/delivery users see their own workspace.
+- All options from the reference image are included.
+- All features already available in web/admin are accessible in desktop where relevant.
+- Features planned in mobile role-based app are reflected where relevant.
+- Offline POS/cart/print/shift works.
+- Sync Center works.
+- Conflicts are handled safely.
+- Role permissions work.
+- No mock data.
+- No dead buttons.
+- No raw ID inputs.
+- No infinite loading.
+- Windows and macOS desktop builds work.

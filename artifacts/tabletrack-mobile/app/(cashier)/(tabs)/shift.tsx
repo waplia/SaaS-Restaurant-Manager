@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { View, Pressable, ScrollView, RefreshControl, Share, Platform } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Alert } from "@/components/ui/AppAlert";
 import { useTheme } from "@/theme";
@@ -49,16 +50,34 @@ export default function CashierShiftScreen() {
   const [movement, setMovement] = useState<MovementInput>({ amount: "", reason: "", type: "cash_in" });
   const [confirmClose, setConfirmClose] = useState(false);
 
+  // Polling interval + freshness matches the web Cash Register page
+  // (src/lib/hooks.ts useCashRegisterCurrent — 15s). If the desktop POS or
+  // web manager opens the register, mobile reflects it within ~15s without
+  // any tap. Plus we force a refetch on tab focus below so the cashier
+  // never sees a stale "register closed" state after switching tabs.
   const currentQ = useQuery<CurrentSession>({
     queryKey: ["cash-register-current", restaurantId],
     queryFn: () => cashierFetch<CurrentSession>(accessToken, `/restaurants/${restaurantId}/cash-register/current`),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
+    refetchOnMount: "always",
+    staleTime: 0,
     enabled: !!accessToken,
   });
 
   const session = currentQ.data?.session ?? null;
   const totals = currentQ.data?.totals ?? null;
   const isOpen = session?.status === "open";
+
+  // Re-check the register state every time the cashier lands on this tab.
+  // The 15s interval + react-query focus bridge already covers most cases,
+  // but a hard refetch on focus guarantees the "Open register" button
+  // never lies — the most common bug was: another device opens the
+  // register → mobile cache still says closed → cashier taps Open → 409.
+  useFocusEffect(
+    useCallback(() => {
+      if (accessToken) void currentQ.refetch();
+    }, [accessToken, currentQ]),
+  );
 
   const detailsQ = useQuery({
     queryKey: ["cash-register-session", restaurantId, session?.id],
@@ -69,7 +88,9 @@ export default function CashierShiftScreen() {
         totals: CashRegisterTotals;
       }>(accessToken, `/restaurants/${restaurantId}/cash-register/sessions/${session!.id}`),
     enabled: !!session?.id && !!accessToken && (canClose || canMove),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
+    refetchOnMount: "always",
+    staleTime: 0,
   });
   const movements = detailsQ.data?.movements ?? [];
 
