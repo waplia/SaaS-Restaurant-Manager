@@ -19,6 +19,7 @@ import { useFavoritesRecents } from "../hooks/useFavoritesRecents";
 import { CommandPalette } from "./CommandPalette";
 import { ComingSoon } from "./ComingSoon";
 import { WORKSPACES, deriveAccess, hasAllModules, hasAnyPermission } from "./roles";
+import { usePlanFeatures } from "./usePlanFeatures";
 import type { NavItem, WorkspaceKey } from "./types";
 import { LockOverlay } from "../screens/Workspace";
 
@@ -35,7 +36,19 @@ interface Props {
   navItems: NavItem[];
   /** Render the active module. Receive the active item; return null to
    *  fall back to the consistent "coming soon" empty state. */
-  renderModule?: (item: NavItem) => React.ReactNode;
+  renderModule?: (
+    item: NavItem,
+    helpers: {
+      navigate: (key: string) => void;
+      /** The same filtered nav list the sidebar renders — already
+       *  permission/module/feature-gated. Module screens (e.g. the
+       *  Back Office index) MUST use this rather than the raw
+       *  `navItems` prop so they never surface a card the user can't
+       *  open. Keeping a single source of truth here is what enforces
+       *  the "hidden, not disabled" requirement end-to-end. */
+      visibleItems: NavItem[];
+    },
+  ) => React.ReactNode;
   onSwitchWorkspace: (key: WorkspaceKey) => void;
   onSwitchOutlet: () => void;
   onOpenSettings: () => void;
@@ -49,11 +62,27 @@ export function DesktopShell(props: Props) {
   const { prefs, update } = useAppPrefs();
   const access = useMemo(() => deriveAccess(user), [user]);
   const meta = WORKSPACES[workspaceKey];
+  const plan = usePlanFeatures(user.restaurantId);
 
   const fav = useFavoritesRecents(user.id, workspaceKey);
-  const visibleItems = useMemo(() => navItems.filter(it =>
-    hasAnyPermission(access, it.requiredPermissions) && hasAllModules(access, it.requiredModules)
-  ), [navItems, access]);
+  // Plan-feature gating: when a nav item names a `requiredFeature`
+  // and the tenant's plan doesn't include it, hide the item. While
+  // the subscription request is in-flight we conservatively hide
+  // every gated item so the user never sees a row that's about to
+  // disappear once the response arrives. Super-admin bypasses the
+  // gate so the platform team can always reach every module.
+  const visibleItems = useMemo(() => {
+    const isSuperAdmin = !!user.isSuperAdmin;
+    return navItems.filter(it => {
+      if (!hasAnyPermission(access, it.requiredPermissions)) return false;
+      if (!hasAllModules(access, it.requiredModules)) return false;
+      if (it.requiredFeature && !isSuperAdmin) {
+        if (!plan.loaded) return false;
+        if (!plan.enabled.has(it.requiredFeature)) return false;
+      }
+      return true;
+    });
+  }, [navItems, access, plan, user.isSuperAdmin]);
   const [active, setActive] = useState<string>(() =>
     fav.favorites.find(k => visibleItems.some(v => v.key === k))
       ?? visibleItems[0]?.key ?? "");
@@ -576,7 +605,13 @@ export function DesktopShell(props: Props) {
         {activeItem ? (
           (() => {
             const rendered = !activeItem.comingSoon && props.renderModule
-              ? props.renderModule(activeItem) : null;
+              ? props.renderModule(activeItem, {
+                  navigate: (k) => {
+                    const next = visibleItems.find(v => v.key === k);
+                    if (next) openItem(next);
+                  },
+                  visibleItems,
+                }) : null;
             if (rendered) return rendered;
             return (
               <ComingSoon
@@ -619,7 +654,7 @@ export function DesktopShell(props: Props) {
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        items={navItems}
+        items={visibleItems}
         access={access}
         favorites={fav.favorites}
         recents={fav.recents}

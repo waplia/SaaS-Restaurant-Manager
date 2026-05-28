@@ -164,7 +164,12 @@ async function createWindow(): Promise<void> {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webviewTag: false,
+      // Enabled so the Manager Office can embed the web admin in-app
+      // via <webview> for modules without a native desktop IPC yet
+      // (inventory, purchase, staff, finance, growth, providers, AI).
+      // We harden the webview below via `will-attach-webview` so embeds
+      // get the same context-isolation / no-node baseline as the shell.
+      webviewTag: true,
       spellcheck: false,
       devTools: IS_DEV,
     },
@@ -189,6 +194,21 @@ async function createWindow(): Promise<void> {
     if (target.origin !== allowed.origin && target.protocol !== "file:") {
       event.preventDefault();
     }
+  });
+
+  // Harden every embedded <webview> the renderer attaches: no node,
+  // context-isolated, no preload, never reuse our shell's renderer
+  // process. Embeds are exclusively used to host the web admin UI for
+  // modules without a native desktop IPC; they share the default
+  // session so the user's existing sign-in cookie comes along.
+  mainWindow.webContents.on("will-attach-webview", (_event, prefs, params) => {
+    delete prefs.preload;
+    (prefs as { preloadURL?: string }).preloadURL = undefined;
+    prefs.nodeIntegration = false;
+    prefs.contextIsolation = true;
+    (prefs as { webSecurity?: boolean }).webSecurity = true;
+    params.allowpopups = "false";
+    params.disablewebsecurity = "false";
   });
 
   await mainWindow.loadURL(buildShellUrl());

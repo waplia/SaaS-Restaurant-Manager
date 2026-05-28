@@ -18,12 +18,14 @@ import type { Branch, SessionSnapshot, SelectionState, User } from "../../../sha
 import { Button, BrandHeader, FullscreenCenter, colors } from "../ui/components";
 import { WorkspaceScreen } from "../screens/Workspace";
 import { ShiftOpenScreen } from "../screens/ShiftOpen";
+import type { WorkspaceHandoff } from "../screens/OrderWorkspace";
 import { DesktopShell } from "./DesktopShell";
 import { NAV_BY_WORKSPACE } from "./navConfigs";
 import {
   WORKSPACES, availableWorkspaces, defaultWorkspace,
 } from "./roles";
-import type { WorkspaceKey } from "./types";
+import type { NavItem, WorkspaceKey } from "./types";
+import { renderManagerScreen } from "./manager/registry";
 
 interface Props {
   user: User;
@@ -147,12 +149,51 @@ export function WorkspaceRouter(props: Props) {
       availableWorkspaces={available}
       outletCount={outletCount}
       navItems={nav}
+      renderModule={active === "manager" ? makeManagerRenderer({
+        user,
+        selection: props.selection,
+        online: props.online,
+        navItems: nav,
+      }) : undefined}
       onSwitchWorkspace={switchTo}
       onSwitchOutlet={props.onSwitchOutlet}
       onOpenSettings={props.onOpenSettings}
       onSignOut={props.onSignOut}
     />
   );
+}
+
+/**
+ * Build the Manager-Office `renderModule` callback for `DesktopShell`.
+ *
+ * The shell hands us the active `NavItem` + a `navigate(key)` helper on
+ * every render; we keep the cross-screen `OrderWorkspace` handoff in a
+ * closure-scoped ref so a Tables / Customers / QR click can resume into
+ * the POS pane without reaching back into the router. Permission /
+ * module gating is already done by the shell (it only renders nav items
+ * the user can access), so the registry just maps `key → component`.
+ */
+function makeManagerRenderer(args: {
+  user: User; selection: SelectionState; online: boolean; navItems: NavItem[];
+}) {
+  let handoff: WorkspaceHandoff | null = null;
+  return (
+    item: NavItem,
+    helpers: { navigate: (key: string) => void; visibleItems: NavItem[] },
+  ) =>
+    renderManagerScreen(item, {
+      user: args.user,
+      selection: args.selection,
+      online: args.online,
+      // Hand the screen registry the SAME gated list the sidebar
+      // renders. The Back Office index reads from this so it never
+      // shows a card the user can't open — closing the "dead button"
+      // and "hidden, not disabled" gaps the code review flagged.
+      navItems: helpers.visibleItems,
+      navigate: helpers.navigate,
+      orderHandoff: handoff,
+      setOrderHandoff: (h) => { handoff = h; },
+    });
 }
 
 function NoWorkspaceScreen({ user, onSignOut }: { user: User; onSignOut: () => void }) {

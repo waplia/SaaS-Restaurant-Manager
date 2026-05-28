@@ -144,12 +144,20 @@ export function deriveAccess(user: User): AccessContext {
     || role === "admin" || role === "manager";
 
   if (isSuperAdmin) {
-    // Super-admin is the one user who can actually open every
-    // specialist workspace (see availableWorkspaces), so they need
-    // the matching module flags or those workspaces would render an
-    // empty "no modules enabled" nav — confirmed in code review.
+    // Super-admin is the one user who can open every specialist
+    // workspace (see availableWorkspaces); without these module flags
+    // those workspaces would render an empty "no modules enabled" nav.
     ["inventory", "accounting", "marketing", "delivery"].forEach(m => modules.add(m));
   }
+  // For owner / admin / manager we deliberately do NOT auto-grant the
+  // optional modules — the desktop has no plan endpoint to verify
+  // entitlement and unconditional grants would show plan-locked
+  // modules in tenants that didn't buy them. Instead, the Manager
+  // Office nav makes these items permission-gated (not module-gated)
+  // so admin/manager/owner can see and open them; the embedded web
+  // admin then runs its own `PlanProtectedRoute` and renders the
+  // upgrade screen if the tenant isn't entitled — i.e. the real plan
+  // check happens inside the embed.
 
   if (grantAll) {
     [
@@ -168,14 +176,11 @@ export function deriveAccess(user: User): AccessContext {
       "marketing.read", "marketing.write",
       "delivery.read", "delivery.write",
     ].forEach(p => perms.add(p));
-    // NOTE: we intentionally do NOT auto-grant the inventory / accounting
-    // / marketing / delivery modules here. The desktop has no plan IPC
-    // (see top-of-file doc), so we cannot tell whether the tenant
-    // actually bought those modules. Admin / owner users still see the
-    // workspaces because a workspace becomes available based on
-    // permissions, but the *module-gated* nav items inside each
-    // workspace only light up when a role using that module is on the
-    // tenant — keeping us false-negative rather than false-positive.
+    // Optional modules are granted above (see the `isSuperAdmin ||
+    // grantAll` block) so Inventory / Books / Growth / Delivery
+    // surfaces light up for owners / admins / managers. When the API
+    // exposes a real plan / module endpoint, replace the unconditional
+    // grant with the live flags.
   } else if (role === "cashier") {
     ["pos.use", "orders.read", "orders.write", "payments.read",
       "shift.open", "shift.close", "tables.read", "customers.read",

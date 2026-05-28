@@ -38,6 +38,12 @@ export interface NavItem {
   requiredPermissions?: string[];
   /** Required module/plan flag(s) — hidden when not enabled for the tenant. */
   requiredModules?: string[];
+  /** Required plan-feature flag (e.g. "inventory_management"). Hidden when
+   *  the tenant's subscription doesn't include the feature. The shell
+   *  resolves this against the live `/api/restaurants/:id/subscription`
+   *  payload so plan-locked modules are not surfaced. Super-admin
+   *  bypasses this gate (see `usePlanFeatures` + `DesktopShell`). */
+  requiredFeature?: string;
   /** Optional search aliases for the command palette. */
   aliases?: string[];
   /** If true the item shows in the nav but renders the "coming soon" empty

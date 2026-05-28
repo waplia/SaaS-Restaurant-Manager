@@ -15,61 +15,120 @@ const G = (g: string) => (
   <span style={{ fontSize: 14, lineHeight: 1, color: "currentColor" }}>{g}</span>
 );
 
+/**
+ * Manager-Office nav.
+ *
+ * Every item that maps to a wired screen in `manager/registry.tsx`
+ * leaves `comingSoon` unset (the shell renders the real component).
+ * Items with no IPC backing yet (inventory, purchase, staff, growth,
+ * providers, AI, finance deep) still light up the rail and render the
+ * `WebAdminBridge` from the registry — the bridge deep-links the
+ * corresponding web-admin page so operators have a *working* path
+ * instead of a dead "Coming soon" wall.
+ *
+ * Permission strings come from `roles.deriveAccess`; module strings
+ * gate the optional Inventory / Accounting / Growth / Delivery
+ * surfaces against the tenant's plan. Both `requiredPermissions` and
+ * `requiredModules` use ANY/ALL semantics — see `roles.ts`.
+ */
 const MANAGER_NAV: NavItem[] = [
-  // Overview
-  { key: "overview", label: "Overview", group: "Overview", icon: G("◎"),
-    requiredPermissions: ["reports.read"], comingSoon: true,
-    aliases: ["dashboard", "home"] },
+  // ─── Overview ─────────────────────────────────────────────────────
+  { key: "overview", label: "Dashboard", group: "Overview", icon: G("◎"),
+    requiredPermissions: ["reports.read"],
+    aliases: ["dashboard", "home", "kpis"] },
+  { key: "backoffice", label: "Back office", group: "Overview", icon: G("⊞"),
+    requiredPermissions: ["settings.read"],
+    aliases: ["modules", "all", "index"] },
 
-  // Orders & service
-  { key: "orders", label: "Live orders", group: "Service", icon: G("▢"),
-    requiredPermissions: ["orders.read"], comingSoon: true },
+  // ─── Service (live operations) ────────────────────────────────────
+  { key: "orders", label: "POS & orders", group: "Service", icon: G("▢"),
+    requiredPermissions: ["orders.read"],
+    aliases: ["pos", "tickets", "live orders"] },
   { key: "tables", label: "Tables & floor", group: "Service", icon: G("⊞"),
-    requiredPermissions: ["tables.read"], comingSoon: true },
+    requiredPermissions: ["tables.read"] },
   { key: "kitchen", label: "Kitchen display", group: "Service", icon: G("⌘"),
-    requiredPermissions: ["kitchen.read"], comingSoon: true },
-  { key: "qr", label: "QR / online orders", group: "Service", icon: G("⊟"),
-    requiredPermissions: ["orders.read"], comingSoon: true },
+    requiredPermissions: ["kitchen.read"], aliases: ["kds", "kot"] },
+  { key: "qr", label: "QR & online orders", group: "Service", icon: G("⊟"),
+    requiredPermissions: ["orders.read"], aliases: ["zomato", "swiggy", "online"] },
 
-  // Catalog
+  // ─── Restaurant setup ────────────────────────────────────────────
+  { key: "outlets", label: "Outlets & branches", group: "Restaurant", icon: G("⌂"),
+    requiredPermissions: ["settings.write"], aliases: ["branches", "stores", "locations"] },
+  { key: "kitchens", label: "Kitchens & stations", group: "Restaurant", icon: G("⌘"),
+    requiredPermissions: ["settings.write"], aliases: ["stations", "bar"] },
+  { key: "taxes", label: "Taxes & charges", group: "Restaurant", icon: G("§"),
+    requiredPermissions: ["settings.write"], aliases: ["gst", "vat", "service charge"] },
+  { key: "discounts", label: "Discounts & offers", group: "Restaurant", icon: G("◈"),
+    requiredPermissions: ["settings.write"], aliases: ["coupons", "promotions"] },
+
+  // ─── Catalog ──────────────────────────────────────────────────────
   { key: "menu", label: "Menu & categories", group: "Catalog", icon: G("☰"),
-    requiredPermissions: ["menu.read"], comingSoon: true },
-  { key: "modifiers", label: "Modifiers", group: "Catalog", icon: G("⊕"),
-    requiredPermissions: ["menu.read"], comingSoon: true },
-  { key: "pricing", label: "Pricing & happy hours", group: "Catalog", icon: G("₹"),
-    requiredPermissions: ["menu.write"], comingSoon: true },
+    requiredPermissions: ["menu.read"], aliases: ["items", "modifiers", "pricing"] },
 
-  // People
+  // ─── People ───────────────────────────────────────────────────────
+  { key: "customers", label: "Customers", group: "People", icon: G("◌"),
+    requiredPermissions: ["customers.read"], aliases: ["crm", "loyalty"] },
   { key: "staff", label: "Staff & roles", group: "People", icon: G("☻"),
-    requiredPermissions: ["staff.read"], comingSoon: true },
-  { key: "shifts", label: "Shifts & attendance", group: "People", icon: G("⧗"),
-    requiredPermissions: ["shift.open"], comingSoon: true },
+    requiredPermissions: ["staff.read"], aliases: ["users", "team", "rosters"] },
+  { key: "attendance", label: "Attendance & shifts", group: "People", icon: G("☑"),
+    requiredPermissions: ["staff.read"], aliases: ["clock-in", "roster"] },
 
-  // Customers
-  { key: "customers", label: "Customers", group: "Customers", icon: G("◌"),
-    requiredPermissions: ["customers.read"], comingSoon: true },
-  { key: "loyalty", label: "Loyalty & coupons", group: "Customers", icon: G("✺"),
-    requiredPermissions: ["customers.read"], comingSoon: true },
+  // ─── Inventory & Procurement ───────────────────────────────────
+  // NOTE: optional modules (inventory / accounting / marketing /
+  // delivery) intentionally aren't `requiredModules` here — the
+  // desktop has no plan endpoint, so the embedded web admin runs the
+  // PlanProtectedRoute check and renders the upgrade screen if the
+  // tenant isn't entitled (see roles.ts). Permission gates still
+  // apply, so cashiers / waiters never see these.
+  { key: "inventory", label: "Inventory", group: "Inventory", icon: G("▦"),
+    requiredPermissions: ["inventory.read"],
+    requiredFeature: "inventory_management",
+    aliases: ["stock", "recipes"] },
+  { key: "purchase", label: "Purchase & suppliers", group: "Inventory", icon: G("◇"),
+    requiredPermissions: ["inventory.read"],
+    requiredFeature: "supplier_network",
+    aliases: ["po", "vendors", "marketplace"] },
 
-  // Finance
-  { key: "payments", label: "Payments", group: "Finance", icon: G("⊟"),
-    requiredPermissions: ["payments.read"], comingSoon: true },
-  { key: "shifts-close", label: "Shift closures", group: "Finance", icon: G("⟳"),
-    requiredPermissions: ["shift.close"], comingSoon: true },
+  // ─── Finance ──────────────────────────────────────────────────────
+  { key: "payments", label: "Payments", group: "Finance", icon: G("₹"),
+    requiredPermissions: ["payments.read"], aliases: ["tender", "bills"] },
+  { key: "finance", label: "Books & expenses", group: "Finance", icon: G("§"),
+    requiredPermissions: ["accounts.read"],
+    requiredFeature: "accounting_back_office",
+    aliases: ["accounting", "tax", "gst", "expenses", "settlements"] },
 
-  // Reports
-  { key: "reports", label: "Reports", group: "Reports", icon: G("☷"),
-    requiredPermissions: ["reports.read"], comingSoon: true },
-  { key: "exports", label: "Exports", group: "Reports", icon: G("↧"),
-    requiredPermissions: ["reports.export"], comingSoon: true },
+  // ─── Growth ───────────────────────────────────────────────────────
+  { key: "growth", label: "Growth & marketing", group: "Growth", icon: G("✦"),
+    requiredPermissions: ["marketing.read"],
+    requiredFeature: "advanced_reports",
+    aliases: ["campaigns", "coupons", "loyalty", "leads"] },
+  { key: "ai", label: "Khana AI", group: "Khana AI", icon: G("✺"),
+    requiredPermissions: ["settings.write"],
+    requiredFeature: "khana_ai_enabled",
+    aliases: ["ai", "import", "forecast", "insights"] },
 
-  // Settings
-  { key: "outlet", label: "Outlet & branches", group: "Settings", icon: G("⌂"),
-    requiredPermissions: ["settings.read"], comingSoon: true },
-  { key: "hardware", label: "Hardware", group: "Settings", icon: G("⎙"),
-    requiredPermissions: ["hardware.manage"], comingSoon: true },
-  { key: "integrations", label: "Integrations", group: "Settings", icon: G("⇄"),
-    requiredPermissions: ["settings.write"], comingSoon: true },
+  // ─── Reports ──────────────────────────────────────────────────────
+  { key: "reports", label: "Reports & Z-history", group: "Reports", icon: G("☷"),
+    requiredPermissions: ["reports.read"], aliases: ["analytics", "exports", "z-report"] },
+
+  // ─── System / Settings ────────────────────────────────────────────
+  { key: "hardware", label: "Hardware", group: "Hardware", icon: G("⎙"),
+    requiredPermissions: ["hardware.manage"],
+    aliases: ["printers", "drawer", "scanner"] },
+  { key: "devices", label: "Devices & terminals", group: "Hardware", icon: G("▣"),
+    requiredPermissions: ["hardware.manage"], aliases: ["terminals", "tills"] },
+  { key: "audit", label: "Audit log", group: "System", icon: G("☷"),
+    requiredPermissions: ["settings.read"], aliases: ["activity", "events"] },
+  { key: "providers", label: "Providers & integrations", group: "Providers", icon: G("⇄"),
+    requiredPermissions: ["settings.write"],
+    requiredFeature: "api_access",
+    aliases: ["api", "webhook", "zomato", "swiggy"] },
+  { key: "sync", label: "Sync", group: "System", icon: G("⟳"),
+    requiredPermissions: ["session.read"], aliases: ["offline", "queue", "conflicts"] },
+  { key: "system", label: "System & logs", group: "System", icon: G("◑"),
+    requiredPermissions: ["session.read"], aliases: ["logs", "diagnostics", "version"] },
+  { key: "settings", label: "Settings", group: "Settings", icon: G("⌂"),
+    requiredPermissions: ["settings.read"], aliases: ["preferences", "connection"] },
 ];
 
 const INVENTORY_NAV: NavItem[] = [

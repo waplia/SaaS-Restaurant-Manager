@@ -52,6 +52,11 @@ const api = {
     },
   },
 
+  // ─── Plan / subscription gating ───────────────────────────────────
+  plan: {
+    features: (req: IpcContract["plan:features"]["req"]) => invoke("plan:features", req),
+  },
+
   // ─── Outlets / counters / selection ───────────────────────────────
   restaurants: { list: () => invoke("restaurants:list") },
   branches: { list: (req: IpcContract["branches:list"]["req"]) => invoke("branches:list", req) },

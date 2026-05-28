@@ -67,10 +67,14 @@ export function CommandPalette({
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Filter to items the user can see — same gates as the left rail.
-  const visible = useMemo(() => items.filter(it =>
-    hasAnyPermission(access, it.requiredPermissions) && hasAllModules(access, it.requiredModules)
-  ), [items, access]);
+  // `items` is already the sidebar's gated `visibleItems` list — same
+  // permission + module + plan-feature filter as the left rail — so we
+  // don't re-filter here. (Re-filtering would also miss `requiredFeature`
+  // gating, which only the shell knows about.) `access` is kept as a
+  // prop so the palette's keyboard shortcuts can still surface
+  // role-aware affordances later without another wiring change.
+  void access;
+  const visible = items;
 
   const rows: Row[] = useMemo(() => {
     if (query.trim()) {

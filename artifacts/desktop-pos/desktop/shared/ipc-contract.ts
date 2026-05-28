@@ -554,6 +554,16 @@ export type IpcContract = {
   "auth:logout": { req: void; res: true };
   "auth:me": { req: void; res: User };
 
+  /** Resolve the tenant's plan feature flags. Calls the authenticated
+   *  /api/restaurants/:id/subscription endpoint via the main-process
+   *  ApiClient so cookies/tokens are attached correctly. The desktop
+   *  shell uses the returned `features` Set to hide plan-locked nav
+   *  items (Inventory, Purchase, Books, Growth, AI, Providers). */
+  "plan:features": {
+    req: { restaurantId: number };
+    res: { features: string[]; planName: string | null };
+  };
+
   // Outlets / counters ------------------------------------------------------
   "restaurants:list": { req: void; res: Restaurant[] };
   "branches:list": { req: { restaurantId: number }; res: Branch[] };

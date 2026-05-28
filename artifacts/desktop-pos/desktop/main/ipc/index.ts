@@ -252,6 +252,31 @@ export function registerApiIpc(opts: {
     return user;
   });
 
+  // Plan / subscription gating — returns the enabled feature flags so
+  // the renderer shell can hide plan-locked nav items rather than
+  // showing them and 403-ing inside the embedded webview. Uses the
+  // authenticated ApiClient (token attachment + refresh).
+  handle("plan:features", async ({ restaurantId }) => {
+    try {
+      const sub = await client.request<{
+        plan?: { name?: string | null; featureFlags?: Record<string, boolean> | null } | null;
+      }>(`/api/restaurants/${restaurantId}/subscription`);
+      const flags = sub?.plan?.featureFlags ?? null;
+      const features: string[] = [];
+      if (flags && typeof flags === "object") {
+        for (const [k, v] of Object.entries(flags)) {
+          if (v === true) features.push(k);
+        }
+      }
+      return { features, planName: sub?.plan?.name ?? null };
+    } catch {
+      // Fail-closed: an unreachable subscription endpoint means we
+      // can't prove a feature is enabled, so the shell will hide
+      // every gated module (which is what the task requires).
+      return { features: [], planName: null };
+    }
+  });
+
   // ─── Restaurants / branches / terminals ──────────────────────────────
   handle("restaurants:list", () => client.listRestaurants());
   handle("branches:list", ({ restaurantId }) => client.listBranches(restaurantId));
